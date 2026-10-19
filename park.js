@@ -592,6 +592,30 @@
   var park = null, cats = null, groundTex = null, albedoTex = null, groundVAO = null, world = null, stroller = null;
   var ferris = null, jets = null, bottleGPU = null;
   var capturedScans = [];
+  var mallards = { groups: [], ducks: [] }, duckGPU = [], duckTime = 0, nextQuack = 6;
+
+  function buildMallards() {
+    mallards = Mallards.create(park, catAt, rng(83));
+    duckGPU = [false, true].map(function (male) {
+      var cl = new Cloud();
+      Mallards.shape(male, function (x, y, z, c, s, em) { cl.add(x, y, z, c, s, em); });
+      return cl.upload();
+    });
+    Mallards.update(mallards.ducks, 0);
+  }
+
+  function duckTick(dt) {
+    duckTime += dt;
+    Mallards.update(mallards.ducks, dt);
+    var playing = game.mode === 'play' || game.mode === 'free';
+    if (duckGain) duckGain.gain.value = state.sound && playing ? 1 : 0;
+    if (!playing || !state.sound || !actx || actx.state !== 'running') return;
+    nextQuack -= dt;
+    if (nextQuack > 0) return;
+    var nearby = mallards.ducks.filter(function (d) { return Math.hypot(d.x - car.x, d.z - car.z) < 32; });
+    nextQuack = nearby.length ? 14 + Math.random() * 18 : 2;
+    if (nearby.length) quack(nearby[Math.floor(Math.random() * nearby.length)]);
+  }
   function catRaw(x, z) {
     var j = Math.floor((x - park.x0) / park.mpp), i = Math.floor((z - park.z0) / park.mpp);
     if (i < 0 || j < 0 || i >= park.h || j >= park.w) return WATER;    // edge of the map
@@ -767,11 +791,45 @@
 
   // ---------------------------------------------------------------- sound ---
 
-  var actx = null;
+  var actx = null, duckGain = null;
   function audio() {
-    if (actx || !state.sound) return;
+    if (actx) { if (state.sound && actx.state === 'suspended') actx.resume(); return; }
+    if (!state.sound) return;
     try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; }
   }
+  // Synthesized calls: a brighter multi-note female quack and a softer,
+  // breathier drake rasp. No external recordings or downloads.
+  function quack(d) {
+    if (!actx || !state.sound || document.hidden) return;
+    if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
+    duckGain.gain.value = 1;
+    var distance = Math.hypot(d.x - car.x, d.z - car.z);
+    var volume = Math.pow(Math.max(0, 1 - distance / 32), 2) * (d.male ? 0.075 : 0.13);
+    var angle = Math.atan2(d.x - car.x, -(d.z - car.z)) - cam.yaw - cam.orbit;
+    var pan = actx.createStereoPanner(); pan.pan.value = Math.sin(angle); pan.connect(duckGain);
+    var count = d.male ? 1 : 2 + Math.floor(Math.random() * 2);
+    for (var i = 0; i < count; i++) {
+      var t = actx.currentTime + i * 0.26, duration = d.male ? 0.24 : 0.18;
+      var voice = actx.createOscillator(), filter = actx.createBiquadFilter(), gain = actx.createGain();
+      voice.type = 'sawtooth';
+      voice.frequency.setValueAtTime(d.male ? 110 : 290 - i * 20, t);
+      voice.frequency.exponentialRampToValueAtTime(d.male ? 72 : 160, t + duration);
+      filter.type = 'bandpass'; filter.frequency.value = d.male ? 850 : 1250; filter.Q.value = 1.4;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume * Math.pow(0.78, i)), t + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+      var buffer = actx.createBuffer(1, Math.ceil(actx.sampleRate * duration), actx.sampleRate);
+      var samples = buffer.getChannelData(0);
+      for (var j = 0; j < samples.length; j++) samples[j] = (Math.random() * 2 - 1) * (d.male ? 0.65 : 0.18);
+      var noise = actx.createBufferSource(); noise.buffer = buffer;
+      voice.connect(filter); noise.connect(filter); filter.connect(gain); gain.connect(pan);
+      voice.start(t); voice.stop(t + duration); noise.start(t);
+      voice.onended = (function (v, n, f, g, last) { return function () {
+        v.disconnect(); n.disconnect(); f.disconnect(); g.disconnect(); if (last) pan.disconnect();
+      }; })(voice, noise, filter, gain, i === count - 1);
+    }
+  }
+  document.addEventListener('visibilitychange', function () { if (document.hidden && duckGain) duckGain.gain.value = 0; });
   function beep(freq, at, dur, type, vol) {
     if (!actx || !state.sound) return;
     var t = actx.currentTime + at, o = actx.createOscillator(), g = actx.createGain();
@@ -885,6 +943,10 @@
       if (dx * dx + dz * dz < reach * reach) { drawCloud(scan.gpu, IDENT, 8); drawn += scan.gpu.n; }
     });
     window.__stats.drawnPoints = drawn;
+    mallards.ducks.forEach(function (d) {
+      if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
+      drawCloud(duckGPU[d.male ? 1 : 0], yawMat(d.heading, d.x, 0.012 * Math.sin(duckTime * 2 + d.phase), d.z), 12);
+    });
     if (ferris) {
       var base = yawMat(ferris.yaw, ferris.x, 0, ferris.z);
       drawCloud(ferris.frame, base, 48);
@@ -926,6 +988,7 @@
     cam.shake *= Math.exp(-dt * 10);
     var turboFov = keys.turbo && car.stamina > 0 && keys.up ? 1 : 0;
     cam.fov += (FOV0 + (8 * Math.min(1, Math.abs(car.v) / 7) + 4 * turboFov) * Math.PI / 180 - cam.fov) * Math.min(1, dt * 4);
+    duckTick(dt);
     draw(now);
     hud(now);
     fpsFrames++;
@@ -1088,6 +1151,7 @@
       state[key] = read(e.target);
       if (key === 'pix') place();
       if (key === 'sound' && state.sound) audio();
+      if (key === 'sound' && !state.sound && duckGain) duckGain.gain.value = 0;
       syncUI(); save();
       e.target.blur();          // arrow keys drive the stroller, not the slider
     });
@@ -1188,6 +1252,7 @@
       if (lm.kind === 'fountain') jets = buildFountainJets(lm, r);
     });
     bottleGPU = buildBottle();
+    buildMallards();
     indexTrunks(park.trees);
     buildMap();
     window.__stats.worldPoints = world.n;
@@ -1241,8 +1306,25 @@
   }
   $('visitScans').addEventListener('click', visitScans);
 
+  function visitDucks() {
+    if (!stroller) return;
+    for (var i = 0; i < mallards.groups.length; i++) {
+      var group = mallards.groups[i];
+      for (var radius = 7; radius <= 16; radius += 1) for (var a = 0; a < Math.PI * 2; a += Math.PI / 32) {
+        var x = group.x + Math.cos(a) * radius, z = group.z + Math.sin(a) * radius;
+        var heading = Math.atan2(group.x - x, -(group.z - z));
+        if ([PATH, ROAD, PLAZA].indexOf(catAt(x, z)) < 0 || blockedAt(x, z, heading)) continue;
+        startGame('free'); car.x = x; car.z = z; car.heading = heading;
+        cam.yaw = heading; cam.orbit = 0; cam.dist = 3; cam.pitch = 0.23; cam.top = false;
+        return;
+      }
+    }
+  }
+  $('visitDucks').addEventListener('click', visitDucks);
+
   // test hooks: drive and play without a keyboard
   window.__setKeys = function (k) { Object.keys(keys).forEach(function (x) { keys[x] = false; }); Object.assign(keys, k); };
   window.__cam = cam; window.__car = car; window.__game = game; window.__start = startGame;
   window.__visitScans = visitScans;
+  window.__mallards = function () { return mallards; };
 })();
