@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Молоко для малыша · Солнечный остров</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #0a0a0a; color: #a8a8a8; overflow: hidden; overscroll-behavior: none; }
+  body { font: 12px/1.4 ui-monospace, 'SF Mono', Menlo, monospace; -webkit-user-select: none; user-select: none; }
+  #stage { position: fixed; inset: 0; cursor: grab; touch-action: none; }
+  #stage.drag { cursor: grabbing; }
+  canvas#c { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; opacity: 0; transition: opacity 0.8s ease-out; }
+  #grain { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.5) 100%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.18; }
+  #grain.off { display: none; }
+  #status { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #777; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; z-index: 9; }
+  .box { background: rgba(10, 10, 10, 0.82); border: 1px solid #262626; }
+  #hud { position: fixed; left: 12px; top: 12px; padding: 8px 12px; color: #d0d0d0; z-index: 5; min-width: 220px; }
+  #hud .big { font-size: 20px; color: #ececec; }
+  #hud .dim { color: #666; }
+  .bar { height: 10px; border: 1px solid #444; margin-top: 5px; position: relative; image-rendering: pixelated; }
+  .bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: #f4f1e8; }
+  #milkBar > i { background: #f4f1e8; }
+  #milkBar.low > i { background: #e4342a; }
+  #stamBar { height: 5px; }
+  #stamBar > i { background: #e8b13a; }
+  #milkRow { display: flex; justify-content: space-between; margin-top: 6px; }
+  #compass { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); padding: 6px 12px; color: #ececec; z-index: 5; display: flex; align-items: center; gap: 8px; }
+  #arrow { display: inline-block; width: 18px; text-align: center; font-size: 16px; color: #f4f1e8; }
+  #place { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); color: #ececec; letter-spacing: 0.06em; z-index: 4; text-shadow: 0 1px 0 #000; opacity: 0; transition: opacity 0.4s; }
+  #pop { position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%); color: #f4f1e8; font-size: 28px; text-shadow: 0 2px 0 #000; z-index: 6; opacity: 0; transition: opacity 0.3s, top 0.6s; pointer-events: none; }
+  #mini { position: fixed; right: 12px; top: 12px; width: 168px; height: 168px; image-rendering: pixelated; z-index: 5; }
+  #mini.off { display: none; }
+  #panel { position: fixed; left: 12px; bottom: 12px; width: 236px; padding: 10px 12px; z-index: 5; }
+  #panel.hidden > :not(.head) { display: none; }
+  #panel .head { display: flex; justify-content: space-between; align-items: center; color: #ececec; }
+  button { font: inherit; color: #a8a8a8; background: none; border: 1px solid #333; padding: 1px 7px; cursor: pointer; }
+  button:hover { color: #f4f1e8; border-color: currentColor; }
+  #panel label { white-space: nowrap; display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 7px; }
+  #panel input[type=range] { width: 100px; accent-color: #e4342a; }
+  #panel select { font: inherit; background: #151515; color: #d0d0d0; border: 1px solid #333; width: 124px; }
+  #panel input[type=checkbox] { accent-color: #e4342a; }
+  #panel .val { color: #ececec; min-width: 28px; text-align: right; }
+  #panel .row { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
+  #pad { position: fixed; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 6; display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(2, 56px); gap: 6px; }
+  #pad button { font-size: 20px; color: #ececec; background: rgba(10, 10, 10, 0.7); border: 2px solid #444; touch-action: none; }
+  #pad button.on { border-color: #f4f1e8; color: #f4f1e8; }
+  #pad [data-k=up] { grid-column: 2; grid-row: 1; }
+  #pad [data-k=turbo] { grid-column: 3; grid-row: 1; font-size: 12px; }
+  #pad [data-k=left] { grid-column: 1; grid-row: 2; }
+  #pad [data-k=down] { grid-column: 2; grid-row: 2; }
+  #pad [data-k=right] { grid-column: 3; grid-row: 2; }
+  #pad [data-k=view] { grid-column: 1; grid-row: 1; font-size: 12px; }
+  #overlay { position: fixed; inset: 0; z-index: 8; display: flex; align-items: center; justify-content: center; background: rgba(10, 10, 10, 0.55); }
+  #overlay.off { display: none; }
+  #card { width: min(440px, calc(100vw - 32px)); padding: 22px 24px; color: #d0d0d0; text-align: center; }
+  #card h1 { font-size: 22px; color: #f4f1e8; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 10px; }
+  #card p { margin: 6px 0; }
+  #card .stats { color: #ececec; font-size: 14px; margin: 12px 0; }
+  #card .btns { display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+  #card button { font-size: 14px; padding: 8px 16px; color: #ececec; border: 2px solid #555; }
+  #card button.main { border-color: #f4f1e8; color: #f4f1e8; }
+  #card .dim { color: #777; }
+  body.free #milkBlock, body.free #compass { display: none; }
+  @media (max-width: 640px) {
+    #panel { width: 200px; bottom: auto; top: 118px; }
+    #mini { width: 112px; height: 112px; }
+    #hud { min-width: 0; width: calc(100vw - 148px); }
+    #hud .help { display: none; }
+    #compass { top: auto; bottom: 150px; }
+    #place { bottom: 150px; display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c"></canvas><div id="grain"></div></div>
+<div id="status">Загрузка…</div>
+<div id="hud" class="box">
+  <div class="big"><span id="speed">0</span> <span class="dim">км/ч</span></div>
+  <div id="milkBlock">
+    <div id="milkRow"><span>Молоко</span><span><span id="milkS">60</span> с · найдено <span id="found">0</span></span></div>
+    <div class="bar" id="milkBar"><i></i></div>
+  </div>
+  <div class="bar" id="stamBar" title="турбо"><i></i></div>
+  <div class="help dim" style="margin-top:6px">WASD / стрелки - ехать · Shift - турбо<br>V - вид сверху · колесо - зум · тянуть - осмотреться</div>
+</div>
+<div id="compass" class="box"><span id="arrow">↑</span><span>бутылочка <span id="bdist">-</span> м</span></div>
+<div id="place"></div>
+<div id="pop">+60 с</div>
+<canvas id="mini" class="box"></canvas>
+<div id="panel" class="box">
+  <div class="head"><span>НАСТРОЙКИ</span><button id="toggle" title="H">−</button></div>
+  <label>Пиксель <input id="pix" type="range" min="1" max="6" step="1"><span class="val" id="pixV"></span></label>
+  <label>Скорость <input id="speedMul" type="range" min="0.5" max="2" step="0.1"><span class="val" id="speedMulV"></span></label>
+  <label>Палитра <select id="palette">
+    <option value="source">Исходные цвета</option>
+    <option value="accent">Акцент (shala)</option>
+    <option value="pico8">PICO-8</option>
+    <option value="gameboy">Game Boy</option>
+    <option value="cga">CGA</option>
+    <option value="mono">1 бит</option>
+  </select></label>
+  <label>Дизеринг <input id="dither" type="checkbox"></label>
+  <label>Ночь <input id="night" type="checkbox"></label>
+  <label>Зерно <input id="grainOn" type="checkbox"></label>
+  <label>Карта <input id="miniOn" type="checkbox"></label>
+  <label>Звук <input id="sound" type="checkbox"></label>
+  <div class="row"><button id="menu">Меню</button><a href="index.html"><button>Просмотр скана</button></a></div>
+  <div class="row"><a href="capture.html"><button>Новая съёмка: фонтаны и аллея →</button></a></div>
+  <div class="row"><button id="visitScans">К новым фонтанам →</button></div>
+</div>
+<div id="pad">
+  <button data-k="view">вид</button>
+  <button data-k="up">▲</button>
+  <button data-k="turbo">турбо</button>
+  <button data-k="left">◀</button>
+  <button data-k="down">▼</button>
+  <button data-k="right">▶</button>
+</div>
+<div id="overlay"><div id="card" class="box">
+  <h1 id="title">Молоко для малыша</h1>
+  <div id="body">
+    <p>В коляске малыш, и он всё время хочет есть.</p>
+    <p>Катай коляску по «Солнечному острову» и собирай бутылочки с молоком. Одной хватает на минуту.</p>
+    <p>Молоко кончилось - малыш плачет, игра окончена.</p>
+    <p class="dim">WASD / стрелки · Shift - турбо · на телефоне кнопки справа</p>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="btns"><button class="main" id="play">Играть</button><button id="free">Просто кататься</button></div>
+</div></div>
+<script src="spz.js"></script>
+<script src="park.js?v=20261019"></script>
+</body>
+</html>

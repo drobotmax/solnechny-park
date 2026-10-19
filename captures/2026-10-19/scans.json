@@ -1,0 +1,26 @@
+[
+  {
+    "source": "Фонтан.spz",
+    "original_points": 564543,
+    "cropped_points": 149597,
+    "crop": "captures/2026-10-19/fountain-a-crop.spz",
+    "center": [
+      1.6,
+      3.6
+    ],
+    "geolocation": null,
+    "note": "Manual local crop; no world position or heading inferred."
+  },
+  {
+    "source": "Untitled scan.spz",
+    "original_points": 550955,
+    "cropped_points": 101060,
+    "crop": "captures/2026-10-19/fountain-b-crop.spz",
+    "center": [
+      -1.7,
+      -2.0
+    ],
+    "geolocation": null,
+    "note": "Manual local crop; no world position or heading inferred."
+  }
+]

@@ -1,0 +1,17 @@
+.DS_Store
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+*.MOV
+*.mov
+*.mp4
+*.db
+*.db-*
+*.log
+captures/**/images/
+captures/**/sfm/
+captures/**/training/
+tools/local/

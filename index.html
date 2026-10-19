@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Карасунский · pixel</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #0a0a0a; color: #a8a8a8; overflow: hidden; }
+  body { font: 12px/1.4 ui-monospace, 'SF Mono', Menlo, monospace; }
+  #stage { position: fixed; inset: 0; cursor: grab; touch-action: none; }
+  #stage.drag { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+  /* Low-res buffer stretched to the CSS size without smoothing: the pixel grid. */
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; opacity: 0; transition: opacity 0.8s ease-out; }
+  /* Vignette and film grain, same recipe as shala.mov. */
+  #grain { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, 0.7) 100%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.22; }
+  #grain.off { display: none; }
+  #status { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #666; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; }
+  #panel { position: fixed; left: 12px; bottom: 12px; width: 256px; padding: 10px 12px; background: rgba(10, 10, 10, 0.82); border: 1px solid #262626; z-index: 5; }
+  #panel.hidden > :not(.head) { display: none; }
+  #panel .head { display: flex; justify-content: space-between; align-items: center; color: #ececec; }
+  #panel button { font: inherit; color: #a8a8a8; background: none; border: 1px solid #333; padding: 1px 7px; cursor: pointer; }
+  #panel button:hover { color: var(--accent, #e4342a); border-color: currentColor; }
+  #panel label { white-space: nowrap; display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 7px; }
+  #panel input[type=range] { width: 110px; accent-color: var(--accent, #e4342a); }
+  #panel select { font: inherit; background: #151515; color: #d0d0d0; border: 1px solid #333; width: 128px; }
+  #panel input[type=color] { width: 40px; height: 18px; border: 1px solid #333; background: none; }
+  #panel input[type=checkbox] { accent-color: var(--accent, #e4342a); }
+  #panel .val { color: #ececec; min-width: 34px; text-align: right; }
+  #panel .row { display: flex; gap: 6px; margin-top: 9px; }
+  #fps { color: #555; }
+  #file { display: none; }
+  @media (max-width: 640px) { #panel { left: 8px; right: 8px; bottom: max(8px, env(safe-area-inset-bottom)); width: auto; } }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c"></canvas><div id="grain"></div></div>
+<div id="status">Загрузка…</div>
+<div id="panel">
+  <div class="head"><span><span id="sceneName">КАРАСУНСКИЙ</span> <span id="fps"></span></span><button id="toggle" title="H">−</button></div>
+  <label>Сцена <select id="scene"><option value="stroller">Коляска</option><option value="fountainA">Фонтан · 1</option><option value="fountainB">Фонтан · 2</option></select></label>
+  <label>Пиксель <input id="pix" type="range" min="1" max="8" step="1"><span class="val" id="pixV"></span></label>
+  <label>Палитра <select id="palette">
+    <option value="accent">Акцент (shala)</option>
+    <option value="source">Исходные цвета</option>
+    <option value="pico8">PICO-8</option>
+    <option value="gameboy">Game Boy</option>
+    <option value="cga">CGA</option>
+    <option value="mono">1 бит</option>
+  </select></label>
+  <label>Акцент <input id="accent" type="color"></label>
+  <label>Дизеринг <input id="dither" type="checkbox"></label>
+  <label>Точка, px <input id="point" type="range" min="1" max="4" step="1"><span class="val" id="pointV"></span></label>
+  <label>Заливка сплатами <input id="fill" type="checkbox"></label>
+  <label><span id="radiusLabel">Охват, м</span> <input id="radius" type="range" min="0" max="100" step="1"><span class="val" id="radiusV"></span></label>
+  <label>Без земли <input id="ground" type="checkbox"></label>
+  <label>Вращение <input id="spin" type="checkbox"></label>
+  <label>Зерно <input id="grainOn" type="checkbox"></label>
+  <label>Перевернуть <input id="flip" type="checkbox"></label>
+  <div class="row"><button id="reset">Сброс вида</button><button id="open">Открыть .spz</button></div>
+  <div class="row"><a href="park.html"><button>Поехать по парку →</button></a></div>
+  <div class="row"><a href="capture.html"><button>Съёмка 19 октября →</button></a></div>
+  <input id="file" type="file" accept=".spz">
+</div>
+<script src="spz.js"></script>
+<script src="capture-scenes.js"></script>
+<script src="app.js?v=20261019"></script>
+</body>
+</html>

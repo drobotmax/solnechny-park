@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Солнечный остров · съёмка 19 октября</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101310;color:#e7eadf;font:16px/1.5 system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:36px 24px 80px}a{color:#d0ee9c;text-underline-offset:4px}nav{display:flex;gap:24px;font-size:14px}h1{font-size:clamp(32px,5vw,58px);line-height:1.08;letter-spacing:-.045em;margin:36px 0 16px}h2{font-size:26px;letter-spacing:-.025em;margin:36px 0 16px}p{max-width:740px;color:#aab3a0}.eyebrow{font:12px ui-monospace,monospace;letter-spacing:.14em;color:#b5d780;text-transform:uppercase}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.card{border:1px solid #343e2d;border-radius:12px;overflow:hidden;background:#181e17}.card .body{padding:20px}.card h3{margin:0 0 8px;font-size:21px}.card p{font-size:14px;margin:8px 0 16px}.card img{width:100%;display:block;aspect-ratio:16/10;object-fit:cover;background:#090b09}.badge{display:inline-block;border:1px solid #57753c;color:#c9e598;padding:3px 8px;border-radius:5px;font:12px ui-monospace,monospace}.button{display:inline-block;padding:9px 14px;background:#d0ee9c;color:#15200e;border-radius:5px;text-decoration:none;font-weight:650;font-size:14px}.note{padding:16px 20px;border-left:3px solid #779e47;background:#1d2518;color:#c1cbb6;font-size:14px}.mapbox{background:#191f17;border:1px solid #343e2d;border-radius:12px;padding:16px;display:grid;grid-template-columns:1fr 260px;gap:24px}.mapbox canvas{width:100%;height:auto;max-height:560px;object-fit:contain}.legend{font-size:14px}.legend p{margin:12px 0}.legend b{color:#e6f4d3}.contact{aspect-ratio:1280/1140!important;object-fit:contain!important}footer{font-size:12px;margin-top:36px;color:#78836d}#reconstruction{white-space:pre-line}summary{cursor:pointer;font-size:14px;padding:12px 0;color:#cbe39e}@media(max-width:700px){main{padding:24px 16px 50px}.grid,.mapbox{grid-template-columns:1fr}.mapbox{gap:8px}h1{margin-top:28px}nav{gap:16px}}
+</style>
+<main>
+<nav><a href="park.html">← Игра с коляской</a><a href="index.html">Просмотрщик сканов</a></nav>
+<h1>Солнечный остров.<br>Теперь из твоей съёмки.</h1>
+<div class="eyebrow">19 октября 2026 · iPhone 15 Pro · 2 скана / 5 видео</div>
+<p>Фонтаны можно вращать в пиксельном просмотрщике. Видео охватывают вход, мост, площадь и начало главной аллеи. Ниже — материалы пилота и точки записи.</p>
+<h2>Два фонтана</h2>
+<p><a class="button" href="park.html?tour=fountains">Покататься у фонтанов →</a></p>
+<div class="grid">
+<article class="card"><a href="index.html?scene=fountainA"><img src="captures/2026-10-19/fountain-a-preview.jpg" alt="Первый скан: вытянутая клумба с каменным фонтаном"></a><div class="body"><span class="badge">149 597 точек после очистки</span><h3>Камни и каскад</h3><p>Исходник «Фонтан.spz». Клумба вырезана из 564 543 исходных точек; дальний фон удалён. Место — по твоей отметке на скриншоте.</p><a class="button" href="index.html?scene=fountainA">Открыть в 3D →</a></div></article>
+<article class="card"><a href="index.html?scene=fountainB"><img src="captures/2026-10-19/fountain-b-preview.jpg" alt="Второй скан: круглая клумба с каменным фонтаном"></a><div class="body"><span class="badge">101 060 точек после очистки</span><h3>Круглый фонтан</h3><p>Исходник «Untitled scan.spz». Клумба вырезана из 550 955 исходных точек; дальний фон удалён. Место — по твоей отметке на скриншоте.</p><a class="button" href="index.html?scene=fountainB">Открыть в 3D →</a></div></article>
+</div>
+<h2>Где записаны видео</h2>
+<div class="mapbox"><canvas id="map" width="1000" height="1040" aria-label="Схема северного входа в парк с точками GPS и кругами погрешности"></canvas><div class="legend"><b>Северный вход · мост · аллея</b><p>Цифры на схеме — последние цифры имени видео. Пунктир показывает заявленную погрешность GPS, а не границы съёмки.</p><p>63 — вход и мост<br>65 — площадь<br>67 — аллея<br>68 — к мосту<br>69 — выход</p><p>GPS записан на уровне файла. Это не трек движения. У площади погрешность достигает 151 м.</p><p>Два голубых маркера — фонтаны по твоим отметкам. Привязка по скриншоту приблизительная.</p></div></div>
+<h2>Что получилось из видео</h2>
+<div class="note" id="reconstruction">Проверка восстановления объёма из кадров выполняется локально. Полноценная 3D-модель из видео здесь пока не заявлена.</div>
+<div id="models" style="display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 30px"></div>
+<h2>Исходные видео</h2>
+<div class="grid" id="videos"></div>
+<footer>Обработка на Маке. Оригиналы остаются в Downloads. Геометрия карты: © участники OpenStreetMap; условные деревья и объекты игры ещё не заменены видеореконструкцией.</footer>
+</main>
+<script src="capture-scenes.js"></script>
+<script>
+for(const [key,scene] of Object.entries(window.CAPTURE_SCENES||{})){const a=document.createElement("a");a.className="button";a.href="index.html?scene="+key;a.textContent=scene.name.toLowerCase()+" →";document.getElementById("models").append(a)}
+const ROOT='captures/2026-10-19/';
+const clips=[['6463','Вход в парк, мост','33,6 с · 4K 60 HDR',45.0126,39.0547,39.3],['6465','Площадь после моста','9,6 с · 4K 60 HDR',45.0107,39.0547,151.3],['6467','Часть главной аллеи','61,7 с · 4K 60 HDR',45.0107,39.0544,33.4],['6468','Выход к мосту','15,5 с · 4K 60 HDR',45.0106,39.0548,24.9],['6469','Выход из парка','17,7 с · 4K 60 HDR',45.0121,39.0543,25.7]];
+for(const [id,title,detail] of clips){const card=document.createElement('article');card.className='card';card.innerHTML=`<div class="body"><span class="eyebrow">IMG_${id}.MOV</span><h3>${title}</h3><p>${detail}</p><details><summary>Посмотреть кадры</summary><img class="contact" loading="lazy" src="${ROOT}${id}-contact.jpg" alt="Шесть кадров: ${title}"></details></div>`;document.getElementById('videos').append(card)}
+Promise.all([fetch('park/park.json').then(r=>{if(!r.ok)throw Error(r.status);return r.json()}),new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src='park/ground.png'}),fetch('park/scans.json').then(r=>r.json())]).then(([park,ground,captures])=>{
+ const cv=document.getElementById('map'),ctx=cv.getContext('2d');const area={x:-160,z:-630,w:320,h:340};
+ const point=([x,z])=>[(x-area.x)/area.w*cv.width,(z-area.z)/area.h*cv.height];
+ ctx.fillStyle='#202b1c';ctx.fillRect(0,0,cv.width,cv.height);ctx.lineCap='round';
+ const bg=document.createElement('canvas');bg.width=ground.width;bg.height=ground.height;const bc=bg.getContext('2d');bc.drawImage(ground,0,0);const pixels=bc.getImageData(0,0,bg.width,bg.height);const colors={1:[48,66,36],2:[125,134,111],3:[132,139,121],4:[40,77,90],5:[88,94,84],6:[114,108,82],7:[75,90,63],8:[35,53,29],9:[96,103,87],10:[43,52,36],11:[133,140,117],12:[86,82,58],13:[111,104,86]};for(let i=0;i<pixels.data.length;i+=4){const c=colors[pixels.data[i]&31]||colors[10];pixels.data[i]=c[0];pixels.data[i+1]=c[1];pixels.data[i+2]=c[2];pixels.data[i+3]=255}bc.putImageData(pixels,0,0);ctx.imageSmoothingEnabled=false;ctx.drawImage(bg,(area.x-park.x0)/park.mpp,(area.z-park.z0)/park.mpp,area.w/park.mpp,area.h/park.mpp,0,0,cv.width,cv.height);
+
+ function line(pts,color,width){ctx.beginPath();pts.forEach((p,i)=>{const q=point(p);i?ctx.lineTo(...q):ctx.moveTo(...q)});ctx.strokeStyle=color;ctx.lineWidth=width/area.w*cv.width;ctx.stroke()}
+ for(const t of park.trees){const q=point(t);ctx.fillStyle='#2f4225';ctx.beginPath();ctx.arc(...q,Math.max(2,t[3]*2),0,Math.PI*2);ctx.fill()}
+ for(const p of park.paths||[])line(p.pts||p,'#778069',p.w||3);
+ for(const b of park.bridges)line(b.pts,'#c5cabb',b.w);
+ ctx.fillStyle='#e0e9ce';ctx.font='24px system-ui';ctx.fillText('СЕВЕР ↑',30,40);
+ for(const scan of captures.scans){const q=point(scan.at);ctx.fillStyle='#6edce4';ctx.beginPath();ctx.arc(...q,12,0,Math.PI*2);ctx.fill();ctx.font='18px system-ui';ctx.textAlign='center';ctx.fillText(scan.id.toUpperCase(),q[0],q[1]-20)}
+
+ for(const [id,title,detail,lat,lon,accuracy] of clips){const x=(lon-park.origin[1])*111320*Math.cos(park.origin[0]*Math.PI/180),z=-(lat-park.origin[0])*111320,q=point([x,z]);ctx.strokeStyle='#c2e79a66';ctx.setLineDash([10,8]);ctx.beginPath();ctx.arc(...q,accuracy/area.w*cv.width,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);const offset={'6465':[-38,-45],'6467':[-40,40],'6468':[50,15]}[id]||[0,0];const label=[q[0]+offset[0],q[1]+offset[1]];ctx.strokeStyle='#cdea9c';ctx.beginPath();ctx.moveTo(...q);ctx.lineTo(...label);ctx.stroke();ctx.fillStyle='#cdea9c';ctx.beginPath();ctx.arc(...q,5,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(...label,18,0,Math.PI*2);ctx.fill();ctx.fillStyle='#10180a';ctx.font='bold 19px system-ui';ctx.textAlign='center';ctx.fillText(id.slice(2),label[0],label[1]+7)}
+}).catch(e=>{document.querySelector('.mapbox').textContent='Карта не загрузилась: '+e.message});
+fetch(ROOT+'reconstruction.json').then(r=>{if(!r.ok)return null;return r.json()}).then(models=>{if(!models)return;const el=document.getElementById('reconstruction');el.textContent=models.length?'Получилось '+models.length+' отдельных разреженных облака. '+models.map(m=>m.registered+' кадров / '+m.points.toLocaleString('ru')+' 3D-точек / ошибка '+m.error_px.toFixed(2)+' px').join('; ')+'. Это разреженная геометрия для проверки съёмки. Масштаб условный. Сплошные поверхности и совмещение облаков между собой и с картой ещё не выполнены.':'По выбранным кадрам устойчивую 3D-геометрию получить не удалось. Видео сохранены как визуальные ориентиры.'}).catch(()=>{});
+</script>
+</html>
