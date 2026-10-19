@@ -28,7 +28,7 @@ with sync_playwright() as p:
  window.AudioContext=class extends NativeContext { constructor(...args) {super(...args); window.__audioContexts.push(this);}
    createBufferSource() {
      const b=super.createBufferSource(), start=b.start.bind(b);
-     b.start=(...args)=>{if (b.buffer && b.buffer.duration >= 0.5) __calls.flap++; return start(...args);};
+     b.start=(...args)=>{if (b.buffer?.duration>2) __calls.coo++; else if (b.buffer?.duration>=0.5) __calls.flap++; return start(...args);};
      return b;
    }
    createOscillator() {
@@ -201,6 +201,71 @@ with sync_playwright() as p:
         ),
         flush=True,
     )
+    # Four distinct solitary dogs move through actual park terrain.
+    dog_data = page.evaluate(
+        """() => ({count:__dogs().dogs.length,coats:__dogs().dogs.map(d=>d.coat)})"""
+    )
+    assert dog_data["count"] == 4 and dog_data["coats"] == [0, 1, 2, 3], dog_data
+    for index in range(4):
+        page.evaluate(
+            """index => {
+          const pop=__dogs(), d=pop.dogs[index];
+          let position=null;
+          for(let a=0;a<Math.PI*2;a+=Math.PI/8) {
+            const x=d.x+Math.cos(a)*8,z=d.z+Math.sin(a)*8;
+            let clear=true;for(let t=-.4;t<=1;t+=.05)if(!pop.canRun(x+(d.x-x)*t,z+(d.z-z)*t)){clear=false;break;}
+            if(clear) {position={x,z};break;}
+          }
+          if(!position)throw Error('No viewpoint near dog');
+          __car.x=position.x;__car.z=position.z;__car.v=0;
+          __car.heading=Math.atan2(d.x-__car.x,-(d.z-__car.z));
+          __cam.yaw=__car.heading;__cam.orbit=0;__cam.top=false;__cam.dist=3;__cam.pitch=.3;
+        }""",
+            index,
+        )
+        page.wait_for_timeout(300)
+        page.screenshot(path=str(out / f"dog-{index}.png"))
+    before = page.evaluate("__dogs().dogs.map(d=>[d.x,d.z])")
+    page.wait_for_timeout(1600)
+    assert page.evaluate("__dogs().dogs.map(d=>[d.x,d.z])") != before
+    assert page.evaluate("__dogs().dogs.every(d=>__dogs().canRun(d.x,d.z))")
+    # Hold the stroller well away and let an actual running dog flush a flock.
+    dog_group = page.evaluate("""() => {
+      const pop=__dogs(),dog=pop.dogs[0];
+      pop.dogs.slice(1).forEach(d=>d.pause=1000);
+      const g=__pigeons().groups.find(g=>g.x===dog.anchorX&&g.z===dog.anchorZ);
+      let start=null;
+      for(let a=0;a<Math.PI*2;a+=Math.PI/8) {
+        const x=g.x+Math.cos(a)*12,z=g.z+Math.sin(a)*12;
+        let ok=true;
+        for(let t=0;t<=1;t+=.03)if(!pop.canRun(x+(g.x-x)*t,z+(g.z-z)*t)){ok=false;break;}
+        if(ok){start={x,z};break;}
+      }
+      if(!start)throw Error('No clear dog route');
+      dog.x=start.x;dog.z=start.z;dog.pause=0;dog.v=0;dog.target={x:g.x,z:g.z};
+      g.birds.forEach(d=>{d.flight=null;d.x=d.homeX;d.z=d.homeZ;d.y=0;d.pause=1000;d.walk=null;});
+      __car.x=g.x;__car.z=g.z+18;__car.v=0;__car.heading=0;
+      __cam.yaw=0;__cam.orbit=0;__cam.dist=6;__cam.pitch=.3;__calls.flap=0;
+      return __pigeons().groups.indexOf(g);
+    }""")
+    page.wait_for_function(
+        "index=>__pigeons().groups[index].birds.every(d=>d.flight) && __calls.flap>0",
+        arg=dog_group,
+        timeout=15000,
+    )
+    assert page.evaluate(
+        "index=>Math.hypot(__car.x-__pigeons().groups[index].x,__car.z-__pigeons().groups[index].z)>14",
+        dog_group,
+    )
+    page.wait_for_timeout(500)
+    page.screenshot(path=str(out / "dog-flush.png"))
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.click("#toggle")
+    page.screenshot(path=str(out / "dog-mobile.png"))
+    page.click("#toggle")
+    page.set_viewport_size({"width": 1440, "height": 900})
+    page.evaluate("__dogs().dogs.forEach(d=>d.pause=0)")
+    print("DOGS", dog_data, "flush/flap PASS", flush=True)
     # Neighbouring existing journeys: bottles, movement, fountain tour, viewer.
     page.click("#menu")
     page.wait_for_timeout(100)

@@ -592,6 +592,7 @@
   var park = null, cats = null, groundTex = null, albedoTex = null, groundVAO = null, world = null, stroller = null;
   var ferris = null, jets = null, bottleGPU = null;
   var capturedScans = [];
+  var dogs = { dogs: [] }, dogGPU = [], dogLegGPU = [];
   var pigeons = { groups: [], birds: [] }, pigeonGPU = null, wingGPU = null, nextCoo = 2;
   var mallards = { groups: [], ducks: [], coots: [], birds: [] }, duckGPU = [], duckTime = 0, nextQuack = 3, nextCoot = 8;
 
@@ -615,6 +616,19 @@
     pigeonGPU = body.upload(); wingGPU = wing.upload();
   }
 
+  function buildDogs() {
+    dogs = Dogs.create(park, pigeons.groups, function (x, z) {
+      var raw = catRaw(x, z), surface = raw & 31;
+      return !!(raw & IN_PARK) && !(raw & UNREACHABLE) && [LAWN, PATH, ROAD, WOOD, PITCH, PLAZA].indexOf(surface) >= 0 && !nearTrunk(x, z, 0.7) && !blockedAt(x, z, 0);
+    }, rng(771));
+    dogGPU = [0, 1, 2, 3].map(function (coat) {
+      var body = new Cloud(), leg = new Cloud();
+      Dogs.shape(coat, function (x, y, z, c, s, em) { body.add(x, y, z, c, s, em); }, false);
+      Dogs.shape(coat, function (x, y, z, c, s, em) { leg.add(x, y, z, c, s, em); }, true);
+      dogLegGPU.push(leg.upload()); return body.upload();
+    });
+  }
+
   function duckTick(dt) {
     duckTime += dt;
     Mallards.update(mallards.birds, dt);
@@ -633,8 +647,11 @@
     nextCoo -= dt;
     if (nextCoo <= 0) {
       var grounded = pigeons.birds.filter(function (d) { return !d.flight && Math.hypot(d.x - car.x, d.z - car.z) < 28; });
-      nextCoo = grounded.length ? 2 + Math.random() * 3 : 2;
-      if (grounded.length) cooSound(grounded[Math.floor(Math.random() * grounded.length)]);
+      nextCoo = 2;
+      if (grounded.length) {
+        grounded.sort(function (a, b) { return Math.hypot(a.x - car.x, a.z - car.z) - Math.hypot(b.x - car.x, b.z - car.z); });
+        nextCoo = cooSound(grounded[0]) ? 2 + Math.random() * 3 : 0.25;
+      }
     }
   }
   function catRaw(x, z) {
@@ -812,11 +829,14 @@
 
   // ---------------------------------------------------------------- sound ---
 
-  var actx = null, duckGain = null;
+  var actx = null, duckGain = null, cooBytes = null, cooBuffer = null, cooVoice = null;
   function audio() {
     if (actx) { if (state.sound && actx.state === 'suspended') actx.resume(); return; }
     if (!state.sound) return;
-    try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; }
+    try {
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (cooBytes) actx.decodeAudioData(cooBytes.slice(0)).then(function (buffer) { cooBuffer = buffer; }).catch(function (err) { console.error('Cannot decode pigeon coo:', err); });
+    } catch (e) { actx = null; }
   }
   // Synthesized calls: a brighter multi-note female quack and a softer,
   // breathier drake rasp; coots have short, higher pitched calls. No recordings.
@@ -853,22 +873,17 @@
     }
   }
   function cooSound(d) {
-    if (!actx || !state.sound || document.hidden) return;
+    if (!actx || !state.sound || document.hidden || !cooBuffer || cooVoice) return false;
     if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
-    var pan = actx.createStereoPanner();
-    pan.pan.value = Math.sin(Math.atan2(d.x - car.x, -(d.z - car.z)) - cam.yaw - cam.orbit); pan.connect(duckGain);
-    var volume = Math.pow(Math.max(0, 1 - Math.hypot(d.x - car.x, d.z - car.z) / 28), 2) * 0.09;
-    [0, 0.18, 0.62].forEach(function (offset, i) {
-      var t = actx.currentTime + offset, duration = [0.13, 0.38, 0.22][i];
-      var voice = actx.createOscillator(), gain = actx.createGain();
-      voice.type = 'sine'; voice.frequency.setValueAtTime([190, 280, 210][i], t);
-      voice.frequency.exponentialRampToValueAtTime([175, 230, 180][i], t + duration);
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), t + duration * 0.3);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
-      voice.connect(gain); gain.connect(pan); voice.start(t); voice.stop(t + duration);
-      voice.onended = function () { voice.disconnect(); gain.disconnect(); if (i === 2) pan.disconnect(); };
-    });
+    var source = actx.createBufferSource(), gain = actx.createGain(), pan = actx.createStereoPanner();
+    source.buffer = cooBuffer; source.playbackRate.value = 0.97 + Math.random() * 0.06;
+    var distance = Math.hypot(d.x - car.x, d.z - car.z);
+    gain.gain.value = 0.85 / (1 + distance / 8);
+    pan.pan.value = Math.sin(Math.atan2(d.x - car.x, -(d.z - car.z)) - cam.yaw - cam.orbit);
+    source.connect(gain); gain.connect(pan); pan.connect(duckGain);
+    cooVoice = source; source.start();
+    source.onended = function () { source.disconnect(); gain.disconnect(); pan.disconnect(); cooVoice = null; };
+    return true;
   }
   function flapSound(group) {
     if (!actx || actx.state !== 'running' || !state.sound || document.hidden) return;
@@ -1018,6 +1033,18 @@
         });
       }
     });
+    dogs.dogs.forEach(function (d) {
+      if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
+      var bob = d.v > 0 ? 0.025 * (1 + Math.sin(d.phase * 2)) : 0;
+      var base = yawMat(d.heading, d.x, bob, d.z);
+      drawCloud(dogGPU[d.coat], base, 12);
+      [-1, 1].forEach(function (side) { [-1, 1].forEach(function (end) {
+        var swing = d.v > 0 ? Math.sin(d.phase + (side === end ? Math.PI : 0)) * 0.7 : 0;
+        var c = Math.cos(swing), s = Math.sin(swing);
+        var leg = [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, side * 0.14, 0.42, end * 0.27, 1];
+        drawCloud(dogLegGPU[d.coat], mat4mul(base, leg), 12);
+      }); });
+    });
     if (ferris) {
       var base = yawMat(ferris.yaw, ferris.x, 0, ferris.z);
       drawCloud(ferris.frame, base, 48);
@@ -1060,7 +1087,10 @@
     var turboFov = keys.turbo && car.stamina > 0 && keys.up ? 1 : 0;
     cam.fov += (FOV0 + (8 * Math.min(1, Math.abs(car.v) / 7) + 4 * turboFov) * Math.PI / 180 - cam.fov) * Math.min(1, dt * 4);
     duckTick(dt);
-    if (game.mode === 'play' || game.mode === 'free') Pigeons.update(pigeons, dt, car, flapSound);
+    if (game.mode === 'play' || game.mode === 'free') {
+      Dogs.update(dogs, dt, car);
+      Pigeons.update(pigeons, dt, car, flapSound, dogs.dogs);
+    }
     draw(now);
     hud(now);
     fpsFrames++;
@@ -1276,8 +1306,10 @@
       loadImage('park/ground.png'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
+      fetch('assets/audio/pigeon-coo.mp3').then(function (r) { if (!r.ok) throw new Error('pigeon-coo.mp3 ' + r.status); return r.arrayBuffer(); }),
     ]);
     park = res[0];
+    cooBytes = res[4];
     park.scans = res[3].scans;
     // Replace the former guessed fountain and clear generated vegetation at
     // the supplied real scan locations before creating geometry or collisions.
@@ -1355,6 +1387,7 @@
     window.__stats.stroller = { points: s.size.length, length: +s.length.toFixed(2), width: +s.width.toFixed(2) };
 
     buildPigeons();
+    buildDogs();
     respawn();
     place();
     statusEl.style.display = 'none';
@@ -1385,4 +1418,5 @@
   window.__visitScans = visitScans;
   window.__mallards = function () { return mallards; };
   window.__pigeons = function () { return pigeons; };
+  window.__dogs = function () { return dogs; };
 })();

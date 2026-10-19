@@ -110,3 +110,17 @@ test('solitary pigeons keep their own walking space beside dense flocks', () => 
     }
   }
 });
+
+test('a nearby dog flushes the flock even with the stroller far away', () => {
+  const p = population(), g = p.groups[0], car = { x: -100, z: -100, v: 0 };
+  const dog = { x: g.x - 2, z: g.z, v: 2.5 };
+  let takeoffs = 0;
+  Pigeons.update(p, 0.2, car, () => takeoffs++, [dog]);
+  assert.equal(takeoffs, 1);
+  assert.ok(g.birds.every(d => d.flight));
+  for (let i = 0; i < 120; i++) Pigeons.update(p, 0.05, car, () => {}, [dog]);
+  assert.ok(g.birds.some(d => d.flight && d.y > 2));
+  dog.x = -100; dog.z = -100;
+  for (let i = 0; i < 70; i++) Pigeons.update(p, 0.05, car, () => {}, [dog]);
+  assert.ok(g.birds.every(d => !d.flight));
+});
