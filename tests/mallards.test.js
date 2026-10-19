@@ -60,3 +60,31 @@ test('coots have dark plumage, white bill and shield, and no mallard markings', 
   assert.ok(!colors.has('22,111,66'));
   assert.ok(!colors.has('57,65,160'));
 });
+
+test('shelducks are rare: one lone bird and a distant male/female pair swimming together', () => {
+  const p = Mallards.create(park, catAt, () => 0.4);
+  assert.equal(p.shelducks.length, 3);
+  assert.deepEqual(p.rareGroups.map(g => g.count), [1, 2]);
+  const [a, b] = p.rareGroups;
+  assert.ok(Math.hypot(a.x - b.x, a.z - b.z) >= 140);
+  assert.equal(p.shelducks[1].male, true);
+  assert.equal(p.shelducks[2].male, false);
+  for (let t = 0; t < 300; t++) {
+    Mallards.update(p.shelducks, 1);
+    assert.ok(Math.abs(Math.hypot(p.shelducks[1].x - p.shelducks[2].x, p.shelducks[1].z - p.shelducks[2].z) - 1) < 0.0001);
+  }
+});
+
+test('shelducks have orange plumage, pale heads and dark bills', () => {
+  for (const male of [false, true]) {
+    const colors = new Set();
+    Mallards.shape(male, (x, y, z, c, size) => {
+      assert.ok([x, y, z, ...c, size].every(Number.isFinite));
+      colors.add(c.join(','));
+    }, 'shelduck');
+    assert.ok(colors.has('203,103,35'));
+    assert.ok(colors.has(male ? '235,202,145' : '246,225,184'));
+    assert.ok(colors.has('34,34,32'));
+    assert.ok(!colors.has('22,111,66'));
+  }
+});

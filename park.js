@@ -592,16 +592,27 @@
   var park = null, cats = null, groundTex = null, albedoTex = null, groundVAO = null, world = null, stroller = null;
   var ferris = null, jets = null, bottleGPU = null;
   var capturedScans = [];
+  var pigeons = { groups: [], birds: [] }, pigeonGPU = null, wingGPU = null, nextCoo = 5;
   var mallards = { groups: [], ducks: [], coots: [], birds: [] }, duckGPU = [], duckTime = 0, nextQuack = 4, nextCoot = 10;
 
   function buildMallards() {
     mallards = Mallards.create(park, catAt, rng(83));
-    duckGPU = [false, true, 'coot'].map(function (male) {
+    duckGPU = [{male: false}, {male: true}, {kind: 'coot'}, {kind: 'shelduck', male: true}, {kind: 'shelduck', male: false}].map(function (bird) {
       var cl = new Cloud();
-      Mallards.shape(male === true, function (x, y, z, c, s, em) { cl.add(x, y, z, c, s, em); }, male === 'coot');
+      Mallards.shape(bird.male, function (x, y, z, c, s, em) { cl.add(x, y, z, c, s, em); }, bird.kind);
       return cl.upload();
     });
     Mallards.update(mallards.birds, 0);
+  }
+
+  function buildPigeons() {
+    pigeons = Pigeons.create(park, function (x, z) {
+      return [PATH, PLAZA].indexOf(catAt(x, z)) >= 0 && !nearTrunk(x, z, 0.6) && !blockedAt(x, z, 0);
+    }, rng(251));
+    var body = new Cloud(), wing = new Cloud();
+    Pigeons.shape(function (x, y, z, c, s, em) { body.add(x, y, z, c, s, em); }, false);
+    Pigeons.shape(function (x, y, z, c, s, em) { wing.add(x, y, z, c, s, em); }, true);
+    pigeonGPU = body.upload(); wingGPU = wing.upload();
   }
 
   function duckTick(dt) {
@@ -619,6 +630,12 @@
     nextQuack -= dt; nextCoot -= dt;
     if (nextQuack <= 0) nextQuack = callNearby(mallards.ducks) ? 7 + Math.random() * 8 : 2;
     if (nextCoot <= 0) nextCoot = callNearby(mallards.coots) ? 18 + Math.random() * 16 : 3;
+    nextCoo -= dt;
+    if (nextCoo <= 0) {
+      var grounded = pigeons.birds.filter(function (d) { return !d.flight && Math.hypot(d.x - car.x, d.z - car.z) < 28; });
+      nextCoo = grounded.length ? 8 + Math.random() * 10 : 2;
+      if (grounded.length) cooSound(grounded[Math.floor(Math.random() * grounded.length)]);
+    }
   }
   function catRaw(x, z) {
     var j = Math.floor((x - park.x0) / park.mpp), i = Math.floor((z - park.z0) / park.mpp);
@@ -835,6 +852,42 @@
       }; })(voice, noise, filter, gain, i === count - 1);
     }
   }
+  function cooSound(d) {
+    if (!actx || !state.sound || document.hidden) return;
+    if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
+    var pan = actx.createStereoPanner();
+    pan.pan.value = Math.sin(Math.atan2(d.x - car.x, -(d.z - car.z)) - cam.yaw - cam.orbit); pan.connect(duckGain);
+    var volume = Math.pow(Math.max(0, 1 - Math.hypot(d.x - car.x, d.z - car.z) / 28), 2) * 0.09;
+    [0, 0.18, 0.62].forEach(function (offset, i) {
+      var t = actx.currentTime + offset, duration = [0.13, 0.38, 0.22][i];
+      var voice = actx.createOscillator(), gain = actx.createGain();
+      voice.type = 'sine'; voice.frequency.setValueAtTime([190, 280, 210][i], t);
+      voice.frequency.exponentialRampToValueAtTime([175, 230, 180][i], t + duration);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), t + duration * 0.3);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+      voice.connect(gain); gain.connect(pan); voice.start(t); voice.stop(t + duration);
+      voice.onended = function () { voice.disconnect(); gain.disconnect(); if (i === 2) pan.disconnect(); };
+    });
+  }
+  function flapSound(group) {
+    if (!actx || actx.state !== 'running' || !state.sound || document.hidden) return;
+    if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
+    var distance = Math.hypot(group.x - car.x, group.z - car.z);
+    var duration = group.size === 'solo' ? 0.55 : 0.9;
+    var buffer = actx.createBuffer(1, Math.ceil(actx.sampleRate * duration), actx.sampleRate);
+    var samples = buffer.getChannelData(0);
+    for (var i = 0; i < samples.length; i++) {
+      var t = i / actx.sampleRate, beat = Math.pow(Math.max(0, Math.sin(t * 46)), 2);
+      samples[i] = (Math.random() * 2 - 1) * (0.15 + 0.85 * beat) * Math.pow(1 - t / duration, 0.6);
+    }
+    var source = actx.createBufferSource(), filter = actx.createBiquadFilter(), gain = actx.createGain(), pan = actx.createStereoPanner();
+    source.buffer = buffer; filter.type = 'bandpass'; filter.frequency.value = 900; filter.Q.value = 0.5;
+    gain.gain.value = Math.max(0, 1 - distance / 24) * (group.size === 'solo' ? 0.09 : 0.18);
+    pan.pan.value = Math.sin(Math.atan2(group.x - car.x, -(group.z - car.z)) - cam.yaw - cam.orbit);
+    source.connect(filter); filter.connect(gain); gain.connect(pan); pan.connect(duckGain); source.start();
+    source.onended = function () { source.disconnect(); filter.disconnect(); gain.disconnect(); pan.disconnect(); };
+  }
   document.addEventListener('visibilitychange', function () { if (document.hidden && duckGain) duckGain.gain.value = 0; });
   function beep(freq, at, dur, type, vol) {
     if (!actx || !state.sound) return;
@@ -951,7 +1004,19 @@
     window.__stats.drawnPoints = drawn;
     mallards.birds.forEach(function (d) {
       if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
-      drawCloud(duckGPU[d.species === 'coot' ? 2 : d.male ? 1 : 0], yawMat(d.heading, d.x, 0.012 * Math.sin(duckTime * 2 + d.phase), d.z), 12);
+      drawCloud(duckGPU[d.species === 'shelduck' ? (d.male ? 3 : 4) : d.species === 'coot' ? 2 : d.male ? 1 : 0], yawMat(d.heading, d.x, 0.012 * Math.sin(duckTime * 2 + d.phase), d.z), 12);
+    });
+    pigeons.birds.forEach(function (d) {
+      if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
+      var base = yawMat(d.heading, d.x, d.y + (!d.flight && d.walk ? 0.008 * Math.sin(duckTime * 14 + d.phase) : 0), d.z);
+      drawCloud(pigeonGPU, base, 10);
+      if (d.flight && d.flight.t > 0) {
+        var angle = Math.sin(duckTime * 34 + d.phase) * 0.95, c = Math.cos(angle), s = Math.sin(angle);
+        [-1, 1].forEach(function (side) {
+          var wing = [side * c, s, 0, 0, -side * s, c, 0, 0, 0, 0, 1, 0, side * 0.08, 0.22, 0, 1];
+          drawCloud(wingGPU, mat4mul(base, wing), 10);
+        });
+      }
     });
     if (ferris) {
       var base = yawMat(ferris.yaw, ferris.x, 0, ferris.z);
@@ -995,6 +1060,7 @@
     var turboFov = keys.turbo && car.stamina > 0 && keys.up ? 1 : 0;
     cam.fov += (FOV0 + (8 * Math.min(1, Math.abs(car.v) / 7) + 4 * turboFov) * Math.PI / 180 - cam.fov) * Math.min(1, dt * 4);
     duckTick(dt);
+    if (game.mode === 'play' || game.mode === 'free') Pigeons.update(pigeons, dt, car, flapSound);
     draw(now);
     hud(now);
     fpsFrames++;
@@ -1288,6 +1354,7 @@
     stroller = { gpu: cloudVAO(s.pos, s.col, s.size), length: s.length, width: s.width };
     window.__stats.stroller = { points: s.size.length, length: +s.length.toFixed(2), width: +s.width.toFixed(2) };
 
+    buildPigeons();
     respawn();
     place();
     statusEl.style.display = 'none';
@@ -1317,4 +1384,5 @@
   window.__cam = cam; window.__car = car; window.__game = game; window.__start = startGame;
   window.__visitScans = visitScans;
   window.__mallards = function () { return mallards; };
+  window.__pigeons = function () { return pigeons; };
 })();

@@ -1,7 +1,7 @@
 // Point-cloud waterbirds. Local forward is -Z, matching the stroller.
 (function (root) {
   'use strict';
-  function shape(male, add, coot) {
+  function shape(male, add, kind) {
     function ellipsoid(cx, cy, cz, rx, ry, rz, color) {
       for (var j = 0; j <= 12; j++) {
         var v = Math.PI * j / 12;
@@ -15,7 +15,23 @@
         }
       }
     }
-    if (coot) {
+    if (kind === 'shelduck') {
+      ellipsoid(0, 0.22, 0.04, 0.21, 0.20, 0.36, [203, 103, 35]);
+      ellipsoid(0, 0.32, -0.20, 0.095, 0.17, 0.10, [219, 141, 57]);
+      ellipsoid(0, 0.48, -0.23, 0.075, 0.12, 0.08, [226, 167, 86]);
+      ellipsoid(0, 0.58, -0.25, 0.10, 0.10, 0.11, male ? [235, 202, 145] : [246, 225, 184]);
+      if (male) ellipsoid(0, 0.44, -0.22, 0.081, 0.017, 0.083, [34, 32, 29]);
+      ellipsoid(0, 0.55, -0.39, 0.043, 0.024, 0.08, [34, 34, 32]);
+      [-1, 1].forEach(function (side) {
+        ellipsoid(side * 0.19, 0.28, 0.09, 0.028, 0.10, 0.23, [187, 87, 28]);
+        ellipsoid(side * 0.21, 0.30, 0.00, 0.011, 0.058, 0.10, [239, 226, 198]);
+        ellipsoid(side * 0.20, 0.26, 0.22, 0.016, 0.05, 0.11, [36, 42, 39]);
+        ellipsoid(side * 0.095, 0.60, -0.29, 0.012, 0.013, 0.012, [19, 21, 18]);
+      });
+      ellipsoid(0, 0.24, 0.40, 0.09, 0.05, 0.11, [32, 37, 33]);
+      return;
+    }
+    if (kind === true || kind === 'coot') {
       ellipsoid(0, 0.18, 0.03, 0.15, 0.16, 0.26, [49, 53, 56]);
       ellipsoid(0, 0.30, -0.14, 0.075, 0.13, 0.08, [31, 34, 36]);
       ellipsoid(0, 0.42, -0.20, 0.082, 0.087, 0.086, [25, 28, 30]);
@@ -47,7 +63,7 @@
   }
 
   function create(park, catAt, random) {
-    var sites = [], groups = [], ducks = [], coots = [], spacing = 6, radius = 6.2;
+    var sites = [], groups = [], ducks = [], coots = [], shelducks = [], rareGroups = [], spacing = 6, radius = 6.2;
     // Entire swimming disc must be real mapped water, including its interior.
     function waterDisc(x, z) {
       var step = park.mpp, half = step / 2;
@@ -94,7 +110,19 @@
       flock(ducks, site, 12, 'mallard');
       flock(coots, neighbor, 24, 'coot');
     });
-    return { groups: groups, ducks: ducks, coots: coots, birds: ducks.concat(coots) };
+    // Just two quiet locations on the whole map, away from the common flocks.
+    sites.forEach(function (site) {
+      if (rareGroups.length >= 2 || Math.hypot(site.x - park.start[0], site.z - park.start[1]) < 80) return;
+      if (groups.some(function (g) { return Math.hypot(g.x - site.x, g.z - site.z) < 26 || Math.hypot(g.coots.x - site.x, g.coots.z - site.z) < 26; })) return;
+      if (rareGroups.some(function (g) { return Math.hypot(g.x - site.x, g.z - site.z) < 140; })) return;
+      var count = rareGroups.length + 1, phase = random() * Math.PI * 2;
+      rareGroups.push({ x: site.x, z: site.z, shore: site.shore, count: count });
+      for (var i = 0; i < count; i++) {
+        shelducks.push({ species: 'shelduck', male: i === 0, cx: site.x + (count === 2 ? i - 0.5 : 0), cz: site.z,
+          x: site.x, z: site.z, radius: 2.2, phase: phase, speed: 0.025, direction: 1, heading: 0 });
+      }
+    });
+    return { groups: groups, ducks: ducks, coots: coots, shelducks: shelducks, rareGroups: rareGroups, birds: ducks.concat(coots, shelducks) };
   }
   function update(ducks, dt) {
     ducks.forEach(function (d) {
