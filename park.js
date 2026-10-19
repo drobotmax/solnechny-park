@@ -592,8 +592,8 @@
   var park = null, cats = null, groundTex = null, albedoTex = null, groundVAO = null, world = null, stroller = null;
   var ferris = null, jets = null, bottleGPU = null;
   var capturedScans = [];
-  var pigeons = { groups: [], birds: [] }, pigeonGPU = null, wingGPU = null, nextCoo = 5;
-  var mallards = { groups: [], ducks: [], coots: [], birds: [] }, duckGPU = [], duckTime = 0, nextQuack = 4, nextCoot = 10;
+  var pigeons = { groups: [], birds: [] }, pigeonGPU = null, wingGPU = null, nextCoo = 2;
+  var mallards = { groups: [], ducks: [], coots: [], birds: [] }, duckGPU = [], duckTime = 0, nextQuack = 3, nextCoot = 8;
 
   function buildMallards() {
     mallards = Mallards.create(park, catAt, rng(83));
@@ -628,12 +628,12 @@
       return true;
     }
     nextQuack -= dt; nextCoot -= dt;
-    if (nextQuack <= 0) nextQuack = callNearby(mallards.ducks) ? 7 + Math.random() * 8 : 2;
-    if (nextCoot <= 0) nextCoot = callNearby(mallards.coots) ? 18 + Math.random() * 16 : 3;
+    if (nextQuack <= 0) nextQuack = callNearby(mallards.ducks) ? 6 + Math.random() * 7 : 2;
+    if (nextCoot <= 0) nextCoot = callNearby(mallards.coots) ? 15 + Math.random() * 13 : 3;
     nextCoo -= dt;
     if (nextCoo <= 0) {
       var grounded = pigeons.birds.filter(function (d) { return !d.flight && Math.hypot(d.x - car.x, d.z - car.z) < 28; });
-      nextCoo = grounded.length ? 8 + Math.random() * 10 : 2;
+      nextCoo = grounded.length ? 2 + Math.random() * 3 : 2;
       if (grounded.length) cooSound(grounded[Math.floor(Math.random() * grounded.length)]);
     }
   }
