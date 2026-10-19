@@ -12,7 +12,7 @@
           var patch = Math.pow((x + 0.15) / 0.17, 2) + Math.pow((z - 0.08) / 0.23, 2) < 1 || Math.pow((x - 0.10) / 0.15, 2) + Math.pow((z + 0.25) / 0.16, 2) < 1 || (z < -0.35 && x > 0.01);
           c = coat === 3 && patch ? [56, 49, 42] : COATS[coat];
         }
-        add(x, y, z, c, 0.034, false);
+        add(x * 0.5, y * 0.5, z * 0.5, c, 0.017, false);
       }
     }
     if (leg) {

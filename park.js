@@ -650,7 +650,7 @@
       nextCoo = 2;
       if (grounded.length) {
         grounded.sort(function (a, b) { return Math.hypot(a.x - car.x, a.z - car.z) - Math.hypot(b.x - car.x, b.z - car.z); });
-        nextCoo = cooSound(grounded[0]) ? 2 + Math.random() * 3 : 0.25;
+        nextCoo = cooSound(grounded[0]) ? 8 + Math.random() * 6 : 2;
       }
     }
   }
@@ -829,13 +829,12 @@
 
   // ---------------------------------------------------------------- sound ---
 
-  var actx = null, duckGain = null, cooBytes = null, cooBuffer = null, cooVoice = null;
+  var actx = null, duckGain = null, cooVoice = null;
   function audio() {
     if (actx) { if (state.sound && actx.state === 'suspended') actx.resume(); return; }
     if (!state.sound) return;
     try {
       actx = new (window.AudioContext || window.webkitAudioContext)();
-      if (cooBytes) actx.decodeAudioData(cooBytes.slice(0)).then(function (buffer) { cooBuffer = buffer; }).catch(function (err) { console.error('Cannot decode pigeon coo:', err); });
     } catch (e) { actx = null; }
   }
   // Synthesized calls: a brighter multi-note female quack and a softer,
@@ -873,15 +872,25 @@
     }
   }
   function cooSound(d) {
-    if (!actx || !state.sound || document.hidden || !cooBuffer || cooVoice) return false;
+    if (!actx || !state.sound || document.hidden || cooVoice) return false;
     if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
-    var source = actx.createBufferSource(), gain = actx.createGain(), pan = actx.createStereoPanner();
-    source.buffer = cooBuffer; source.playbackRate.value = 0.97 + Math.random() * 0.06;
-    var distance = Math.hypot(d.x - car.x, d.z - car.z);
-    gain.gain.value = 0.85 / (1 + distance / 8);
+    var source = actx.createOscillator(), gain = actx.createGain(), pan = actx.createStereoPanner();
+    // A few pulse-like harmonics give the short coo the park's chiptune timbre.
+    source.setPeriodicWave(actx.createPeriodicWave(new Float32Array(8), new Float32Array([0, 1, 0, 0.3, 0, 0.15, 0, 0.08])));
+    var now = actx.currentTime, distance = Math.hypot(d.x - car.x, d.z - car.z);
+    var volume = 0.035 / (1 + distance / 8);
+    gain.gain.setValueAtTime(0, now);
+    [220, 270, 235].forEach(function (hz, i) {
+      var t = now + i * 0.22;
+      source.frequency.setValueAtTime(hz, t);
+      source.frequency.setValueAtTime(hz - 20, t + 0.09);
+      gain.gain.linearRampToValueAtTime(volume * (i === 1 ? 1 : 0.7), t + 0.025);
+      gain.gain.linearRampToValueAtTime(0, t + 0.18);
+      gain.gain.setValueAtTime(0, t + 0.22);
+    });
     pan.pan.value = Math.sin(Math.atan2(d.x - car.x, -(d.z - car.z)) - cam.yaw - cam.orbit);
     source.connect(gain); gain.connect(pan); pan.connect(duckGain);
-    cooVoice = source; source.start();
+    cooVoice = source; source.start(now); source.stop(now + 0.66);
     source.onended = function () { source.disconnect(); gain.disconnect(); pan.disconnect(); cooVoice = null; };
     return true;
   }
@@ -1035,13 +1044,13 @@
     });
     dogs.dogs.forEach(function (d) {
       if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
-      var bob = d.v > 0 ? 0.025 * (1 + Math.sin(d.phase * 2)) : 0;
+      var bob = d.v > 0 ? 0.0125 * (1 + Math.sin(d.phase * 2)) : 0;
       var base = yawMat(d.heading, d.x, bob, d.z);
       drawCloud(dogGPU[d.coat], base, 12);
       [-1, 1].forEach(function (side) { [-1, 1].forEach(function (end) {
         var swing = d.v > 0 ? Math.sin(d.phase + (side === end ? Math.PI : 0)) * 0.7 : 0;
         var c = Math.cos(swing), s = Math.sin(swing);
-        var leg = [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, side * 0.14, 0.42, end * 0.27, 1];
+        var leg = [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, side * 0.07, 0.21, end * 0.135, 1];
         drawCloud(dogLegGPU[d.coat], mat4mul(base, leg), 12);
       }); });
     });
@@ -1306,10 +1315,8 @@
       loadImage('park/ground.png'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('assets/audio/pigeon-coo.mp3').then(function (r) { if (!r.ok) throw new Error('pigeon-coo.mp3 ' + r.status); return r.arrayBuffer(); }),
     ]);
     park = res[0];
-    cooBytes = res[4];
     park.scans = res[3].scans;
     // Replace the former guessed fountain and clear generated vegetation at
     // the supplied real scan locations before creating geometry or collisions.

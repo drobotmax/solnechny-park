@@ -33,7 +33,7 @@ with sync_playwright() as p:
    }
    createOscillator() {
      const o=super.createOscillator(), start=o.start.bind(o);
-     o.start=(...args)=>{ __calls[o.type==='triangle'?'coot':o.type==='sine'?'coo':'mallard']++; return start(...args); };
+     o.start=(...args)=>{ __calls[o.type==='triangle'?'coot':o.type==='custom'?'coo':'mallard']++; return start(...args); };
      return o;
    }
  };
