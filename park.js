@@ -592,29 +592,33 @@
   var park = null, cats = null, groundTex = null, albedoTex = null, groundVAO = null, world = null, stroller = null;
   var ferris = null, jets = null, bottleGPU = null;
   var capturedScans = [];
-  var mallards = { groups: [], ducks: [] }, duckGPU = [], duckTime = 0, nextQuack = 6;
+  var mallards = { groups: [], ducks: [], coots: [], birds: [] }, duckGPU = [], duckTime = 0, nextQuack = 4, nextCoot = 10;
 
   function buildMallards() {
     mallards = Mallards.create(park, catAt, rng(83));
-    duckGPU = [false, true].map(function (male) {
+    duckGPU = [false, true, 'coot'].map(function (male) {
       var cl = new Cloud();
-      Mallards.shape(male, function (x, y, z, c, s, em) { cl.add(x, y, z, c, s, em); });
+      Mallards.shape(male === true, function (x, y, z, c, s, em) { cl.add(x, y, z, c, s, em); }, male === 'coot');
       return cl.upload();
     });
-    Mallards.update(mallards.ducks, 0);
+    Mallards.update(mallards.birds, 0);
   }
 
   function duckTick(dt) {
     duckTime += dt;
-    Mallards.update(mallards.ducks, dt);
+    Mallards.update(mallards.birds, dt);
     var playing = game.mode === 'play' || game.mode === 'free';
     if (duckGain) duckGain.gain.value = state.sound && playing ? 1 : 0;
     if (!playing || !state.sound || !actx || actx.state !== 'running') return;
-    nextQuack -= dt;
-    if (nextQuack > 0) return;
-    var nearby = mallards.ducks.filter(function (d) { return Math.hypot(d.x - car.x, d.z - car.z) < 32; });
-    nextQuack = nearby.length ? 14 + Math.random() * 18 : 2;
-    if (nearby.length) quack(nearby[Math.floor(Math.random() * nearby.length)]);
+    function callNearby(birds) {
+      var nearby = birds.filter(function (d) { return Math.hypot(d.x - car.x, d.z - car.z) < 32; });
+      if (!nearby.length) return false;
+      quack(nearby[Math.floor(Math.random() * nearby.length)]);
+      return true;
+    }
+    nextQuack -= dt; nextCoot -= dt;
+    if (nextQuack <= 0) nextQuack = callNearby(mallards.ducks) ? 7 + Math.random() * 8 : 2;
+    if (nextCoot <= 0) nextCoot = callNearby(mallards.coots) ? 18 + Math.random() * 16 : 3;
   }
   function catRaw(x, z) {
     var j = Math.floor((x - park.x0) / park.mpp), i = Math.floor((z - park.z0) / park.mpp);
@@ -798,29 +802,31 @@
     try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; }
   }
   // Synthesized calls: a brighter multi-note female quack and a softer,
-  // breathier drake rasp. No external recordings or downloads.
+  // breathier drake rasp; coots have short, higher pitched calls. No recordings.
   function quack(d) {
     if (!actx || !state.sound || document.hidden) return;
     if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
     duckGain.gain.value = 1;
+    var coot = d.species === 'coot';
     var distance = Math.hypot(d.x - car.x, d.z - car.z);
-    var volume = Math.pow(Math.max(0, 1 - distance / 32), 2) * (d.male ? 0.075 : 0.13);
+    var volume = Math.pow(Math.max(0, 1 - distance / 32), 2) * (coot ? 0.11 : d.male ? 0.075 : 0.13);
     var angle = Math.atan2(d.x - car.x, -(d.z - car.z)) - cam.yaw - cam.orbit;
     var pan = actx.createStereoPanner(); pan.pan.value = Math.sin(angle); pan.connect(duckGain);
-    var count = d.male ? 1 : 2 + Math.floor(Math.random() * 2);
+    var count = coot ? 1 + Math.floor(Math.random() * 2) : d.male ? 1 : 2 + Math.floor(Math.random() * 2);
     for (var i = 0; i < count; i++) {
-      var t = actx.currentTime + i * 0.26, duration = d.male ? 0.24 : 0.18;
+      var t = actx.currentTime + i * 0.26, duration = coot ? 0.12 : d.male ? 0.24 : 0.18;
       var voice = actx.createOscillator(), filter = actx.createBiquadFilter(), gain = actx.createGain();
-      voice.type = 'sawtooth';
-      voice.frequency.setValueAtTime(d.male ? 110 : 290 - i * 20, t);
-      voice.frequency.exponentialRampToValueAtTime(d.male ? 72 : 160, t + duration);
-      filter.type = 'bandpass'; filter.frequency.value = d.male ? 850 : 1250; filter.Q.value = 1.4;
+      voice.type = coot ? 'triangle' : 'sawtooth';
+      voice.frequency.setValueAtTime(coot ? 950 : d.male ? 110 : 290 - i * 20, t);
+      if (coot) voice.frequency.exponentialRampToValueAtTime(1450, t + 0.025);
+      voice.frequency.exponentialRampToValueAtTime(coot ? 650 : d.male ? 72 : 160, t + duration);
+      filter.type = 'bandpass'; filter.frequency.value = coot ? 1700 : d.male ? 850 : 1250; filter.Q.value = 1.4;
       gain.gain.setValueAtTime(0.0001, t);
       gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume * Math.pow(0.78, i)), t + 0.018);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
       var buffer = actx.createBuffer(1, Math.ceil(actx.sampleRate * duration), actx.sampleRate);
       var samples = buffer.getChannelData(0);
-      for (var j = 0; j < samples.length; j++) samples[j] = (Math.random() * 2 - 1) * (d.male ? 0.65 : 0.18);
+      for (var j = 0; j < samples.length; j++) samples[j] = (Math.random() * 2 - 1) * (coot ? 0.3 : d.male ? 0.65 : 0.18);
       var noise = actx.createBufferSource(); noise.buffer = buffer;
       voice.connect(filter); noise.connect(filter); filter.connect(gain); gain.connect(pan);
       voice.start(t); voice.stop(t + duration); noise.start(t);
@@ -943,9 +949,9 @@
       if (dx * dx + dz * dz < reach * reach) { drawCloud(scan.gpu, IDENT, 8); drawn += scan.gpu.n; }
     });
     window.__stats.drawnPoints = drawn;
-    mallards.ducks.forEach(function (d) {
+    mallards.birds.forEach(function (d) {
       if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
-      drawCloud(duckGPU[d.male ? 1 : 0], yawMat(d.heading, d.x, 0.012 * Math.sin(duckTime * 2 + d.phase), d.z), 12);
+      drawCloud(duckGPU[d.species === 'coot' ? 2 : d.male ? 1 : 0], yawMat(d.heading, d.x, 0.012 * Math.sin(duckTime * 2 + d.phase), d.z), 12);
     });
     if (ferris) {
       var base = yawMat(ferris.yaw, ferris.x, 0, ferris.z);
@@ -1305,22 +1311,6 @@
     if (!found) throw new Error('Нет свободного подхода к фонтанам');
   }
   $('visitScans').addEventListener('click', visitScans);
-
-  function visitDucks() {
-    if (!stroller) return;
-    for (var i = 0; i < mallards.groups.length; i++) {
-      var group = mallards.groups[i];
-      for (var radius = 7; radius <= 16; radius += 1) for (var a = 0; a < Math.PI * 2; a += Math.PI / 32) {
-        var x = group.x + Math.cos(a) * radius, z = group.z + Math.sin(a) * radius;
-        var heading = Math.atan2(group.x - x, -(group.z - z));
-        if ([PATH, ROAD, PLAZA].indexOf(catAt(x, z)) < 0 || blockedAt(x, z, heading)) continue;
-        startGame('free'); car.x = x; car.z = z; car.heading = heading;
-        cam.yaw = heading; cam.orbit = 0; cam.dist = 3; cam.pitch = 0.23; cam.top = false;
-        return;
-      }
-    }
-  }
-  $('visitDucks').addEventListener('click', visitDucks);
 
   // test hooks: drive and play without a keyboard
   window.__setKeys = function (k) { Object.keys(keys).forEach(function (x) { keys[x] = false; }); Object.assign(keys, k); };
