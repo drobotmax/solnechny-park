@@ -127,10 +127,19 @@ for w in ways.values():
     elif h == 'service':
         line(w['nodes'], ROAD if t.get('service') != 'parking_aisle' else PARKING, 5)
         main_alleys.append(w)
-    elif h == 'pedestrian': line(w['nodes'], PATH, 7); main_alleys.append(w)
+    elif h == 'pedestrian':
+        surface = ROAD if w['id'] == 176130542 or t.get('surface') == 'asphalt' else PATH
+        if t.get('area') == 'yes' and closed(w): poly(w['nodes'], surface)
+        else: line(w['nodes'], surface, 7)
+        main_alleys.append(w)
     elif h in ('footway', 'path', 'track', 'cycleway', 'steps'):
         paved = t.get('surface') in ('asphalt', 'paving_stones', 'concrete', None)
-        line(w['nodes'], PATH, 4 if paved else 2.5)
+        # Only the filmed portion of the western alley has a verified broad asphalt surface.
+        if w['id'] == 176130555:
+            line(w['nodes'][5:], PATH, 4)
+            line(w['nodes'][:6], ROAD, 14)
+        else:
+            line(w['nodes'], ROAD if t.get('surface') == 'asphalt' else PATH, 4 if paved else 2.5)
         if paved and t.get('surface'): main_alleys.append(w)
 
 # rides, fences, zoo
@@ -149,9 +158,12 @@ for e in poi['elements']:
         fences.append({'pts': [[r2(x), r2(z)] for x, z in g], 'h': 2.0 if t.get('barrier') == 'fence' else 1.6})
     if t.get('bridge') == 'yes' and t.get('highway'):
         width = float(t.get('width', 4 if t.get('highway') == 'footway' else 5))
-        line_cells(cells, PATH, width)
+        line_cells(cells, ROAD if t.get('surface') == 'asphalt' else PATH, width)
         bridges.append({'pts': [[r2(x), r2(z)] for x, z in g], 'w': width,
                         'osm_id': e['id'], 'kind': t['highway'], 'surface': t.get('surface', '')})
+
+approach_way = ways[176130555]
+approach = {'alley': [[r2(v) for v in loc(*nodes[n])] for n in approach_way['nodes'][:6]]}
 
 buildings = []
 for w in ways.values():
@@ -272,6 +284,7 @@ Image.fromarray(albedo).save(outdir + '/albedo.jpg', quality=82)
 json.dump({'mpp': MPP, 'x0': round(x0, 3), 'z0': round(z0, 3), 'w': WPX, 'h': HPX,
            'origin': [LAT0, LON0], 'start': [r2(sx), r2(sz), round(heading, 3)],
            'buildings': buildings, 'trees': trees, 'rides': rides, 'fences': fences, 'bridges': bridges,
+           'approach': approach,
            'props': props, 'landmarks': landmarks, 'labels': labels},
           open(outdir + '/park.json', 'w'), separators=(',', ':'), ensure_ascii=False)
 pal = [(30, 30, 30), (110, 170, 80), (225, 215, 195), (90, 90, 95), (40, 80, 170), (150, 120, 100),

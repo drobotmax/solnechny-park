@@ -674,14 +674,19 @@
       }
     });
     park.landmarks.forEach(function (lm) { buildLandmark(cl, r, lm); });
-    buildEntranceDetails(cl, r);
+    buildEntranceDetails(cl, r, park.approach);
     return cl.upload();
   }
 
-  // Stylized alignment from the user's plaza/alley contact sheets, not a survey.
-  function buildEntranceDetails(cl, r) {
-    [-5,21].forEach(function (x) {
-      var z=-402;
+  // The western alley centerline is OSM way 176130555; its width and street furniture
+  // follow the user's plaza/alley footage, with approximate offsets from that line.
+  function buildEntranceDetails(cl, r, approach) {
+    if (!approach || !approach.alley) return;
+    var alley = approach.alley;
+    var a = alley[1], b = alley[2], length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    var nx = -(b[1] - a[1]) / length, nz = (b[0] - a[0]) / length;
+    [-8, 8].forEach(function (offset) {
+      var x = a[0] + nx * offset, z = a[1] + nz * offset;
       [-0.65,0.65].forEach(function (dx) {[-0.65,0.65].forEach(function (dz) {
         for(var y=0;y<10;y+=.16) cl.add(x+dx,y,z+dz,[174,181,180],.09,false);
       });});
@@ -691,17 +696,22 @@
       for(var dx=-1;dx<=1;dx+=.5) {cl.add(x+dx,9.5,z-.8,[54,58,58],.22,false);cl.add(x+dx,9.5,z+.8,[54,58,58],.22,false);}
       for(var y=1.2;y<5.3;y+=.22) for(var dx=-.5;dx<=.5;dx+=.22) cl.add(x+dx,y,z,[139,163,99],.15,false);
     });
-    // Low stone planting edges and clipped conifers along the main approach.
-    [-5,21].forEach(function (edge) {
-      for(var z=-394;z<-335;z+=.25) {
-        var x=edge-(z+394)*.19;
-        for(var y=.1;y<.5;y+=.16) cl.add(x,y,z,mul([135,133,118],.85+r()*.3),.16,false);
-      }
-      for(var z=-388;z<-340;z+=9) {
-        var x=edge-(z+394)*.19+(edge<0?-1.3:1.3);
-        for(var y=.3;y<5.5;y+=.18) for(var a=0;a<6.28;a+=.55) {
-          var rad=(1-y/5.8)*.95;
-          cl.add(x+Math.cos(a)*rad,y,z+Math.sin(a)*rad,mul([40,69,37],.85+r()*.35),.24,false);
+    // A single raised planting edge is visible on the west side of this alley.
+    var wall = alley.slice(1).map(function (p, i, pts) {
+      var before = pts[Math.max(0, i - 1)], after = pts[Math.min(pts.length - 1, i + 1)];
+      var dx = after[0] - before[0], dz = after[1] - before[1], d = Math.hypot(dx, dz) || 1;
+      return [p[0] - dz / d * 7.5, p[1] + dx / d * 7.5];
+    });
+    polyline(wall, .22, function (x, z, s) {
+      for (var y = .1; y < .55; y += .15)
+        cl.add(x, y, z, mul([135, 133, 118], .85 + r() * .3), .17, false);
+      cl.add(x, .6, z, [164, 161, 147], .16, false);
+      if (s > 5 && s < 53 && s % 9 < .22) {
+        for (var cy = .6; cy < 5.5; cy += .18) for (var angle = 0; angle < 6.28; angle += .55) {
+          var rad = (1 - cy / 5.8) * .95;
+          cl.add(x + nx * 1.4 + Math.cos(angle) * rad, cy,
+                 z + nz * 1.4 + Math.sin(angle) * rad,
+                 mul([40, 69, 37], .85 + r() * .35), .24, false);
         }
       }
     });
@@ -1933,11 +1943,11 @@
   async function boot() {
     statusEl.textContent = 'Загрузка парка…';
     var res = await Promise.all([
-      fetch('park/park.json').then(function (r) { if (!r.ok) throw new Error('park.json ' + r.status); return r.json(); }),
-      loadImage('park/ground.png'),
+      fetch('park/park.json?v=20261020-approach2').then(function (r) { if (!r.ok) throw new Error('park.json ' + r.status); return r.json(); }),
+      loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261020-verified-bridge1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261020-approach2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
