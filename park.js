@@ -522,9 +522,49 @@
     }
   }
 
+  function titanOak(cl, r, x, z) {
+    // Commons photographs show one broad, forked trunk, not two overlapping trees.
+    var bark = [84, 69, 52], y, a, i, t;
+    for (y = 0.2; y < 8.2; y += 0.22) {
+      var radius = 1.18 - y * 0.065;
+      for (a = 0; a < 6.283; a += 0.32)
+        cl.add(x + Math.cos(a) * radius, y, z + Math.sin(a) * radius,
+               mul(bark, 0.75 + r() * 0.35), 0.26, false);
+    }
+    var limbs = [[-8, 15, -2], [8, 16, 1], [-4, 19, 5], [5, 20, -5], [0, 22, 0]];
+    limbs.forEach(function (tip, index) {
+      for (t = 0; t <= 1; t += 0.045) {
+        var lx = x + tip[0] * t, ly = 6.5 + (tip[1] - 6.5) * t, lz = z + tip[2] * t;
+        var thick = (index < 2 ? 0.72 : 0.43) * (1 - t * 0.75);
+        for (a = 0; a < 6.283; a += 0.8)
+          cl.add(lx + Math.cos(a) * thick, ly, lz + Math.sin(a) * thick,
+                 mul(bark, 0.8 + r() * 0.25), Math.max(0.12, thick * 0.6), false);
+      }
+      for (i = 0; i < 175; i++) {
+        var u = r() * 2 - 1, angle = r() * 6.283, ring = Math.sqrt(1 - u * u), fill = 0.55 + 0.45 * Math.cbrt(r());
+        var dx = Math.cos(angle) * ring, dz = Math.sin(angle) * ring;
+        cl.add(x + tip[0] + dx * 5.2 * fill, tip[1] + u * 3.2 * fill,
+               z + tip[2] + dz * 5.2 * fill,
+               mul([67, 107, 43], 0.72 + r() * 0.4), 0.52 + r() * 0.3, false);
+      }
+    });
+    var fence = [[x-2.5,z-2.5],[x+2.5,z-2.5],[x+2.5,z+2.5],[x-2.5,z+2.5],[x-2.5,z-2.5]];
+    polyline(fence, 0.25, function (fx, fz, s) {
+      cl.add(fx, 0.85, fz, [63, 78, 64], 0.07, false);
+      if (s % 1.6 < 0.25) for (var fy = 0.18; fy < 0.9; fy += 0.18)
+        cl.add(fx, fy, fz, [63, 78, 64], 0.08, false);
+    });
+  }
+
   function buildWorld(park) {
     var r = rng(11), cl = new ChunkedCloud();
-    park.trees.forEach(function (t) { tree(cl, r, t[0], t[1], t[2], t[3]); });
+    var oakSites = park.landmarks.filter(function (lm) { return lm.kind === 'oak'; });
+    var hiddenTree = { add: function () {} };
+    park.trees.forEach(function (t) {
+      var crowdedOak = oakSites.some(function (oak) { return Math.hypot(t[0] - oak.at[0], t[1] - oak.at[1]) < 7.5; });
+      // Consume the same seeded choices so nearby removal does not alter the rest of the park.
+      tree(crowdedOak ? hiddenTree : cl, r, t[0], t[1], t[2], t[3]);
+    });
 
     // Buildings: walls with a plinth and windows, flat roof; the planetarium
     // gets its dome.
@@ -566,13 +606,53 @@
         for (var y = 0.15; y < f.h; y += post ? 0.15 : 0.45) cl.add(x, y, z, post ? [70, 70, 64] : [96, 112, 92], post ? 0.12 : 0.08, false);
       });
     });
+    var entranceRoad = park.bridges.find(function (b) { return b.osm_id === 27081408; });
     park.bridges.forEach(function (b) {
+      // OSM maps the entrance road and its two sidewalks as three ways.
+      // The roadside rails belong to the sidewalks, not to a second road deck.
+      if (b.osm_id === 27081408) return;
       var p = b.pts;
+      var entranceWalk = b.osm_id === 176130545 || b.osm_id === 176130547;
+      var outerSide = 0;
+      if (entranceWalk && entranceRoad) {
+        var start = p[0], end = p[1], seg = Math.hypot(end[0] - start[0], end[1] - start[1]) || 1;
+        var ox = -(end[1] - start[1]) / seg * b.w / 2, oz = (end[0] - start[0]) / seg * b.w / 2;
+        var roadStart = entranceRoad.pts[0];
+        outerSide = Math.hypot(start[0] + ox - roadStart[0], start[1] + oz - roadStart[1]) >
+                    Math.hypot(start[0] - ox - roadStart[0], start[1] - oz - roadStart[1]) ? 1 : -1;
+      }
       for (var side = -1; side <= 1; side += 2) {
         var off = [];
         for (var i = 0; i < p.length; i++) {
           var a = p[Math.max(0, i - 1)], c = p[Math.min(p.length - 1, i + 1)], L = Math.hypot(c[0] - a[0], c[1] - a[1]) || 1;
           off.push([p[i][0] - (c[1] - a[1]) / L * b.w / 2 * side, p[i][1] + (c[0] - a[0]) / L * b.w / 2 * side]);
+        }
+        if (entranceWalk) {
+          var outer = side === outerSide;
+          polyline(off, 0.22, function (x, z, s) {
+            cl.add(x, 0.12, z, outer ? [144, 141, 132] : [184, 183, 174], 0.17, false);
+            cl.add(x, 0.35, z, outer ? [155, 151, 141] : [205, 207, 200], 0.12, false);
+            if (outer) {
+              cl.add(x, 1.03, z, [229, 232, 226], 0.075, false);
+              if (s % 3.2 < 0.22) {
+                for (var y = 0.38; y < 1.1; y += 0.16)
+                  cl.add(x, y, z, [165, 161, 150], 0.25, false);
+              }
+            }
+          });
+          // The white ring pattern and stone parapet are visible in the 2026 entrance footage.
+          for (var j = 0; outer && j + 1 < off.length; j++) {
+            var from = off[j], to = off[j + 1], length = Math.hypot(to[0] - from[0], to[1] - from[1]);
+            if (!length) continue;
+            var ux = (to[0] - from[0]) / length, uz = (to[1] - from[1]) / length;
+            for (var center = 0.8; center < length - 0.7; center += 1.55)
+              for (var angle = 0; angle < 6.283; angle += 0.24) {
+                var along = center + Math.cos(angle) * 0.63;
+                cl.add(from[0] + ux * along, 0.66 + Math.sin(angle) * 0.32,
+                       from[1] + uz * along, [226, 230, 225], 0.065, false);
+              }
+          }
+          continue;
         }
         polyline(off, 0.15, function (x, z, s) {
           cl.add(x, 1.05, z, [200, 200, 205], 0.08, false); cl.add(x, 0.55, z, [160, 160, 165], 0.06, false);
@@ -715,8 +795,7 @@
       for (var gx = -1.5; gx <= 1.5; gx += 0.2) for (var gz = -1.5; gz <= 1.5; gz += 0.2) for (y = 0; y < 1.2; y += 0.3) cl.add(x + gx, y, z + gz, [120, 110, 105], 0.2, false);
       for (y = 1.2; y < 7; y += 0.15) for (a = 0; a < 6.283; a += 0.6) cl.add(x + Math.cos(a) * 0.45 * (1 - (y - 1.2) / 8), y, z + Math.sin(a) * 0.45 * (1 - (y - 1.2) / 8), [140, 128, 110], 0.15, false);
     } else if (lm.kind === 'oak') {
-      tree(cl, r, x, z, 24, 10, 0.8);
-      tree(cl, r, x + 2, z - 1, 20, 8, 0.4);
+      titanOak(cl, r, x, z);
     } else if (lm.kind === 'pier') {
       var best = 0, bestScore = -1;
       for (a = 0; a < 6.283; a += 0.2) {                 // face the open water
@@ -1858,7 +1937,7 @@
       loadImage('park/ground.png'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261020-open-rides2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261020-verified-bridge1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -1874,8 +1953,10 @@
     park.landmarks = park.landmarks.filter(function (lm) { return lm.kind !== 'fountain'; });
     park.labels = park.labels.filter(function (label) { return label[0] !== 'Фонтан'; });
     park.scans.forEach(function (scan) { park.labels.unshift([scan.name, scan.at, 16]); });
+    var oakSites = park.landmarks.filter(function (lm) { return lm.kind === 'oak'; });
     park.trees = park.trees.filter(function (tree) {
-      return !park.scans.some(function (scan) { return Math.hypot(tree[0] - scan.at[0], tree[1] - scan.at[1]) < 9; });
+      return !park.scans.some(function (scan) { return Math.hypot(tree[0] - scan.at[0], tree[1] - scan.at[1]) < 9; }) &&
+             !oakSites.some(function (oak) { return Math.hypot(tree[0] - oak.at[0], tree[1] - oak.at[1]) < 7.5; });
     });
     park.props = park.props.filter(function (prop) {
       return !park.scans.some(function (scan) { return inside(scan.footprint, prop[1], prop[2]); });
@@ -1929,7 +2010,7 @@
     });
     bottleGPU = buildBottle();
     buildMallards();
-    indexTrunks(park.trees);
+    indexTrunks(park.trees.concat(oakSites.map(function (oak) { return [oak.at[0], oak.at[1], 22, 9]; })));
     buildMap();
     window.__stats.worldPoints = res[4].worldPoints;
 

@@ -148,8 +148,10 @@ for e in poi['elements']:
         line_cells(cells, FENCE, 0.5)
         fences.append({'pts': [[r2(x), r2(z)] for x, z in g], 'h': 2.0 if t.get('barrier') == 'fence' else 1.6})
     if t.get('bridge') == 'yes' and t.get('highway'):
-        line_cells(cells, PATH, 4 if t.get('highway') == 'footway' else 5)
-        bridges.append({'pts': [[r2(x), r2(z)] for x, z in g], 'w': 4 if t.get('highway') == 'footway' else 5})
+        width = float(t.get('width', 4 if t.get('highway') == 'footway' else 5))
+        line_cells(cells, PATH, width)
+        bridges.append({'pts': [[r2(x), r2(z)] for x, z in g], 'w': width,
+                        'osm_id': e['id'], 'kind': t['highway'], 'surface': t.get('surface', '')})
 
 buildings = []
 for w in ways.values():
