@@ -49,7 +49,7 @@
   var stage = document.getElementById('stage');
   var canvas = document.getElementById('c');
   var statusEl = document.getElementById('status');
-  var gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: true });
+  var gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: false });
   if (!gl) { statusEl.textContent = 'WebGL2 недоступен'; return; }
 
   function readSaved() { try { return JSON.parse(localStorage.getItem('pixel-park') || '{}'); } catch (e) { return {}; } }
@@ -101,6 +101,9 @@
     'layout(location = 0) in vec3 aPos;\n' +
     'layout(location = 1) in vec4 aCol;\n' +
     'layout(location = 2) in float aSize;\n' +
+    'layout(location = 3) in mat4 aInstance;\n' +
+    'uniform bool uInstanced;\n' +
+    'uniform float uDensity;\n' +
     'uniform mat4 uModel, uView, uProj;\n' +
     'uniform float uFocal, uFogNear, uFogFar, uMaxPt, uLight, uTime, uAnim;\n' +
     'out vec3 vCol;\n' +
@@ -111,9 +114,9 @@
     '    float ph = fract(aPos.y + uTime * 0.55), reach = length(aPos.xz);\n' +
     '    p = vec3(aPos.x * ph, 0.6 + (5.5 - reach) * 4.0 * ph * (1.0 - ph), aPos.z * ph);\n' +
     '  }\n' +
-    '  vec4 v = uView * uModel * vec4(p, 1.0);\n' +
+    '  vec4 v = uView * (uInstanced ? aInstance : uModel) * vec4(p, 1.0);\n' +
     '  gl_Position = uProj * v;\n' +
-    '  gl_PointSize = clamp(2.0 * aSize * uFocal / max(-v.z, 1e-3), 1.0, uMaxPt);\n' +
+    '  gl_PointSize = clamp(2.0 * aSize * uDensity * uFocal / max(-v.z, 1e-3), 1.0, uMaxPt);\n' +
     '  float em = aCol.a < 0.75 ? 1.0 : 0.0;\n' +
     '  vCol = aCol.rgb * mix(uLight, 1.15, em);\n' +
     '  vFog = smoothstep(uFogNear, uFogFar, -v.z) * (1.0 - 0.6 * em);\n' +
@@ -155,6 +158,10 @@
     '  if (cat == 11) c = mix(vec3(0.62, 0.60, 0.56), sat, 0.45) * (0.88 + 0.24 * h);\n' +
     '  if (cat == 2) {\n' +               // paving, like the scanned path
     '    c = vec3(0.74, 0.71, 0.66) * (0.86 + 0.22 * h);\n' +
+    '    vec2 brick = vec2(vXZ.x + mod(floor(vXZ.y / 0.3), 2.0)*0.3, vXZ.y);\n' +
+    '    vec2 edge = min(fract(brick/vec2(0.6,0.3)), 1.0-fract(brick/vec2(0.6,0.3)));\n' +
+    '    float seam = 1.0-smoothstep(0.025,0.07,min(edge.x,edge.y));\n' +
+    '    c *= 1.0 - seam*near*0.22;\n' +
     '    if (h2 > 0.975 && near > 0.0) c = mix(c, vec3(0.72, 0.50, 0.25), near);\n' +
     '  } else if (cat == 3) {\n' +        // park alleys: asphalt
     '    c = vec3(0.42, 0.42, 0.43) * (0.85 + 0.25 * h);\n' +
@@ -189,7 +196,7 @@
       .forEach(function (k) { u[k] = gl.getUniformLocation(p, k); });
     return u;
   }
-  var P = program(PTS_VS, PTS_FS, ['uModel', 'uFocal', 'uMaxPt', 'uAnim']);
+  var P = program(PTS_VS, PTS_FS, ['uModel', 'uFocal', 'uMaxPt', 'uAnim', 'uInstanced', 'uDensity']);
   var G = program(GROUND_VS, GROUND_FS, ['uGround', 'uAlbedo', 'uFrame']);
 
   // Point cloud under construction: position, RGBA, world size.
@@ -217,17 +224,28 @@
     return cloudVAO(new Float32Array(this.pos), new Uint8Array(this.col), new Float32Array(this.size));
   };
   function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v; }
+  var cloudId = 0;
   function cloudVAO(pos, col, size) {
-    var vao = gl.createVertexArray();
-    gl.bindVertexArray(vao);
-    [[pos, 3, gl.FLOAT, false], [col, 4, gl.UNSIGNED_BYTE, true], [size, 1, gl.FLOAT, false]].forEach(function (a, i) {
-      gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-      gl.bufferData(gl.ARRAY_BUFFER, a[0], gl.STATIC_DRAW);
-      gl.enableVertexAttribArray(i);
-      gl.vertexAttribPointer(i, a[1], a[2], a[3], 0, 0);
+    var attrs = [[pos, 3, gl.FLOAT, false, 4], [col, 4, gl.UNSIGNED_BYTE, true, 1], [size, 1, gl.FLOAT, false, 4]];
+    var buffers = attrs.map(function (a) {
+      var buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, a[0], gl.STATIC_DRAW); return buffer;
     });
+    var vaos = {};
+    [1, 2, 4].forEach(function (stride) {
+      var vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+      attrs.forEach(function (a, i) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffers[i]); gl.enableVertexAttribArray(i);
+        gl.vertexAttribPointer(i, a[1], a[2], a[3], a[1]*a[4]*stride, 0);
+      });
+      vaos[stride] = vao;
+    });
+    var lo = [Infinity,Infinity,Infinity], hi = [-Infinity,-Infinity,-Infinity];
+    for (var i=0;i<pos.length;i++) { var axis=i%3; lo[axis]=Math.min(lo[axis],pos[i]); hi[axis]=Math.max(hi[axis],pos[i]); }
+    var center=lo.map(function (v,i) {return size.length ? (v+hi[i])/2 : 0;});
+    var radius=size.length ? Math.hypot(hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2])/2+2 : 0;
     gl.bindVertexArray(null);
-    return { vao: vao, n: size.length };
+    return {id: ++cloudId, vao: vaos[1], vaos: vaos, n: size.length, center: center, radius: radius, instances: gl.createBuffer()};
   }
 
   // ------------------------------------------------------------ stroller ---
@@ -417,6 +435,11 @@
         }
         polyline(off, 0.15, function (x, z, s) {
           cl.add(x, 1.05, z, [200, 200, 205], 0.08, false); cl.add(x, 0.55, z, [160, 160, 165], 0.06, false);
+          var phase = (s % 0.8) / 0.8 * Math.PI*2;
+          var curve = 0.3*Math.sin(phase);
+          cl.add(x,0.55+curve,z,[180,184,180],0.045,false);
+          cl.add(x,0.55-curve,z,[180,184,180],0.045,false);
+          cl.add(x,0.08,z,[165,161,148],0.13,false);
           if (s % 2 < 0.15) for (var y = 0; y < 1.05; y += 0.12) cl.add(x, y, z, [120, 120, 125], 0.07, false);
         });
       }
@@ -768,7 +791,7 @@
     var starving = game.mode === 'play' && game.milk <= 0;
     var fwd = keys.up && !starving, back = keys.down && !starving;
     var steerIn = starving ? 0 : (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-    car.steer += (steerIn - car.steer) * Math.min(1, dt * 10);        // a hand on the handle, not a switch
+    car.steer += (steerIn - car.steer) * (1 - Math.exp(-dt * 10));        // a hand on the handle, not a switch
 
     var surf = SURF[catAt(car.x, car.z)] || [0.6, 2.4];
     var turbo = keys.turbo && fwd && car.stamina > 0;
@@ -776,7 +799,9 @@
     else car.stamina = Math.min(STAMINA, car.stamina + REGEN * dt);
     var top = (turbo ? TURBO : RUN) * state.speedMul * surf[0];
 
-    if (fwd && !back) {
+    if (fwd && back) {
+      car.v = Math.sign(car.v) * Math.max(0, Math.abs(car.v) - BRAKE * dt);
+    } else if (fwd && !back) {
       if (car.v < 0) car.v = Math.min(0, car.v + BRAKE * dt);
       else if (car.v < top) car.v = Math.min(top, car.v + PUSH * state.speedMul * (turbo ? 1.6 : 1) * dt * (1 - 0.6 * car.v / Math.max(top, 0.1)));
       else car.v = Math.max(top, car.v - surf[1] * 2 * dt);           // rolled onto grass
@@ -789,7 +814,8 @@
     }
 
     var sp = Math.abs(car.v);
-    var rate = sp < 0.5 ? TURN_PIVOT : TURN_MAX * (1 - 0.35 * Math.min(1, Math.max(0, (sp - 4) / 3)));
+    var rate = TURN_PIVOT + (TURN_MAX - TURN_PIVOT) * Math.min(1, sp / 1.5);
+    rate /= 1 + Math.max(0, sp - 3) * 0.18;
     var dh = car.steer * rate * dt * (car.v < -0.05 ? -1 : 1);
     if (!blockedAt(car.x, car.z, car.heading + dh)) car.heading += dh;
 
@@ -800,9 +826,9 @@
     // Slide along whatever we hit, losing the speed that went into it.
     var canX = !blockedAt(car.x + mx, car.z, car.heading), canZ = !blockedAt(car.x, car.z + mz, car.heading);
     var impact = sp;
-    if (canX && (!canZ || Math.abs(mx) >= Math.abs(mz))) { car.x += mx; car.v *= Math.abs(sx) * 0.9 + 0.05; impact = sp * Math.abs(sz); }
-    else if (canZ) { car.z += mz; car.v *= Math.abs(sz) * 0.9 + 0.05; impact = sp * Math.abs(sx); }
-    else { car.v = -car.v * 0.2; }
+    if (canX && (!canZ || Math.abs(mx) >= Math.abs(mz))) { car.x += mx; car.odo += Math.abs(mx); car.v *= Math.abs(sx) * 0.9 + 0.05; impact = sp * Math.abs(sz); }
+    else if (canZ) { car.z += mz; car.odo += Math.abs(mz); car.v *= Math.abs(sz) * 0.9 + 0.05; impact = sp * Math.abs(sx); }
+    else { car.v = 0; }
     if (impact > 1.5) { cam.shake = Math.min(0.25, impact * 0.04); sfx('bump'); }
   }
 
@@ -1068,8 +1094,10 @@
     return best;
   }
 
+  var optimized = new URLSearchParams(location.search).get('optimize') !== '0';
   var t0 = performance.now();
   function draw(now) {
+    var renderStart = performance.now(), submitted = 0, calls = 1, batches = new Map();
     var time = (now - t0) / 1000;
     var sp = Math.abs(car.v);
     var bob = sp > 0.1 ? 0.012 * Math.sin(car.odo * 9) : 0;
@@ -1114,27 +1142,55 @@
     gl.uniform1f(P.uFocal, focal);
     gl.uniform1f(P.uTime, time);
     gl.uniform1f(P.uAnim, 0);
+    gl.uniform1i(P.uInstanced, 0); gl.uniform1f(P.uDensity, 1);
     gl.uniform1f(P.uFogNear, fogNear); gl.uniform1f(P.uFogFar, fogFar);
-    function drawCloud(c, m, maxPt) {
-      gl.uniform1f(P.uMaxPt, maxPt);
-      gl.uniformMatrix4fv(P.uModel, false, m);
-      gl.bindVertexArray(c.vao);
-      gl.drawArrays(gl.POINTS, 0, c.n);
+    function drawCloud(c, m, maxPt, animated) {
+      var p=c.center, x=m[0]*p[0]+m[4]*p[1]+m[8]*p[2]+m[12], y=m[1]*p[0]+m[5]*p[1]+m[9]*p[2]+m[13], z=m[2]*p[0]+m[6]*p[1]+m[10]*p[2]+m[14];
+      if (optimized && !animated && !ParkPerformance.visible(view,x,y,z,c.radius,fov,canvas.width/canvas.height,fogFar+30)) return;
+      var distance=Math.hypot(x-eye[0],y-eye[1],z-eye[2]);
+      var stride=optimized && !animated ? ParkPerformance.stride(distance) : 1;
+      var count=Math.ceil(c.n/stride);
+      submitted += count;
+      if (!optimized || animated) {
+        gl.uniform1i(P.uInstanced,0); gl.uniform1f(P.uDensity,Math.sqrt(stride));
+        gl.uniform1f(P.uMaxPt,maxPt); gl.uniformMatrix4fv(P.uModel,false,m);
+        gl.bindVertexArray(c.vaos[stride]); gl.drawArrays(gl.POINTS,0,count); calls++; return;
+      }
+      var key=c.id+':'+maxPt+':'+stride, batch=batches.get(key);
+      if (!batch) { batch={cloud:c, stride:stride, maxPt:maxPt, matrices:[]}; batches.set(key,batch); }
+      batch.matrices.push.apply(batch.matrices,m);
     }
-    var reach = fogFar + CHUNK * 0.75, drawn = 0;
+    function flushClouds() {
+      gl.uniform1i(P.uInstanced,1);
+      batches.forEach(function (batch) {
+        var c=batch.cloud; gl.bindVertexArray(c.vaos[batch.stride]);
+        gl.bindBuffer(gl.ARRAY_BUFFER,c.instances);
+        gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(batch.matrices),gl.DYNAMIC_DRAW);
+        for(var i=0;i<4;i++) { gl.enableVertexAttribArray(3+i); gl.vertexAttribPointer(3+i,4,gl.FLOAT,false,64,i*16); gl.vertexAttribDivisor(3+i,1); }
+        gl.uniform1f(P.uDensity,Math.sqrt(batch.stride)); gl.uniform1f(P.uMaxPt,batch.maxPt);
+        gl.drawArraysInstanced(gl.POINTS,0,Math.ceil(c.n/batch.stride),batch.matrices.length/16); calls++;
+        for(var i=0;i<4;i++) {gl.disableVertexAttribArray(3+i);gl.vertexAttribDivisor(3+i,0);}
+      });
+      batches.clear(); gl.uniform1i(P.uInstanced,0);
+    }
+    var reach = fogFar + CHUNK * 0.75;
     gl.uniform1f(P.uMaxPt, 48);
     gl.uniformMatrix4fv(P.uModel, false, IDENT);
     world.chunks.forEach(function (ch) {
       var dx = ch.cx - eye[0], dz = ch.cz - eye[2];
       if (dx * dx + dz * dz > reach * reach) return;
       if ((dx * cfx + dz * cfz) < -CHUNK && !cam.top) return;          // behind the camera
-      gl.bindVertexArray(ch.vao); gl.drawArrays(gl.POINTS, 0, ch.n); drawn += ch.n;
+      if (optimized && !ParkPerformance.visible(view,ch.center[0],ch.center[1],ch.center[2],ch.radius,fov,canvas.width/canvas.height,fogFar+30)) return;
+      var stride=optimized ? ParkPerformance.stride(Math.max(0,Math.hypot(dx,dz)-CHUNK*0.75)) : 1;
+      gl.uniform1f(P.uDensity,Math.sqrt(stride));
+      gl.bindVertexArray(ch.vaos[stride]); gl.drawArrays(gl.POINTS,0,Math.ceil(ch.n/stride));
+      submitted+=Math.ceil(ch.n/stride); calls++;
     });
     capturedScans.forEach(function (scan) {
       var dx = scan.at[0] - eye[0], dz = scan.at[1] - eye[2];
-      if (dx * dx + dz * dz < reach * reach) { drawCloud(scan.gpu, IDENT, 8); drawn += scan.gpu.n; }
+      if (dx * dx + dz * dz < reach * reach) { drawCloud(scan.gpu, IDENT, 8); }
     });
-    window.__stats.drawnPoints = drawn;
+
     mallards.birds.forEach(function (d) {
       if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
       drawCloud(duckGPU[d.species === 'shelduck' ? (d.male ? 3 : 4) : d.species === 'coot' ? 2 : d.male ? 1 : 0], yawMat(d.heading, d.x, 0.012 * Math.sin(duckTime * 2 + d.phase), d.z), 12);
@@ -1195,16 +1251,49 @@
       drawCloud(ferris.frame, base, 48);
       drawCloud(ferris.wheel, mat4mul(mat4mul(base, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, ferris.hub, 0, 1]), rollMat(time * 0.05)), 48);
     }
-    if (jets) { gl.uniform1f(P.uAnim, 1); drawCloud(jets.cloud, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, jets.x, 0, jets.z, 1], 8); gl.uniform1f(P.uAnim, 0); }
+    flushClouds();
+    if (jets) { gl.uniform1f(P.uAnim, 1); drawCloud(jets.cloud, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, jets.x, 0, jets.z, 1], 8, true); gl.uniform1f(P.uAnim, 0); }
     game.bottles.forEach(function (b) {
       drawCloud(bottleGPU, yawMat(time * 1.5 + b.phase, b.x, 0.08 + 0.06 * Math.sin(time * 3 + b.phase), b.z), 10);
     });
     drawCloud(stroller.gpu, model, 6);
+    flushClouds();
+    window.__stats.drawnPoints=submitted; window.__stats.drawCalls=calls;
+    window.__stats.renderCpuMs=+(performance.now()-renderStart).toFixed(2);
     gl.bindVertexArray(null);
   }
 
   // ---------------------------------------------------------------- loop ---
 
+  var benchmark = new URLSearchParams(location.search).get('benchmark') === '1';
+  var benchmarkFrame = 0, benchmarkRows = [], benchmarkSamples = [], benchmarkError = 0;
+  var benchmarkPoses = [[8.25,-415.7,3.142],[-22.63,-311.04,-0.873],[-10,-500,3.142]];
+  var benchmarkEl = null;
+  if (benchmark) {
+    benchmarkEl=document.createElement('pre');benchmarkEl.id='benchmark';
+    benchmarkEl.style.cssText='position:fixed;top:20px;right:20px;z-index:100;background:#111e;color:white;padding:16px;font:14px monospace';
+    document.body.appendChild(benchmarkEl);
+  }
+  function benchmarkSummary() {
+    return 'scene / optimized / points / calls / CPU ms\n' + benchmarkRows.map(function (r) {
+      return [r.scene, r.optimized ? 'on' : 'off', Math.round(r.points), r.calls, r.cpuMs].join(' / ');
+    }).join('\n');
+  }
+  function benchmarkTick() {
+    benchmarkError = gl.getError() || benchmarkError;
+    var block=Math.floor(benchmarkFrame/120);
+    if(block>=6) {benchmarkEl.textContent=benchmarkSummary()+'\nWebGL error: '+benchmarkError;window.__benchmark=benchmarkRows;return;}
+    var pose=benchmarkPoses[Math.floor(block/2)];optimized=block%2===1;
+    game.mode='free';car.x=pose[0];car.z=pose[1];car.heading=pose[2];car.v=0;
+    cam.yaw=pose[2];cam.orbit=0;cam.pitch=.28;cam.dist=8;cam.top=false;
+    if(benchmarkFrame%120>=30)benchmarkSamples.push([window.__stats.drawnPoints||0,window.__stats.drawCalls||0,window.__stats.renderCpuMs||0]);
+    benchmarkFrame++;
+    if(benchmarkFrame%120===0) {
+      var avg=benchmarkSamples.reduce(function(a,b){return a.map(function(v,i){return v+b[i];});},[0,0,0]).map(function(v){return +(v/benchmarkSamples.length).toFixed(2);});
+      benchmarkRows.push({scene:Math.floor(block/2),optimized:optimized,points:avg[0],calls:avg[1],cpuMs:avg[2]});benchmarkSamples=[];
+    }
+    benchmarkEl.textContent='Сравнение отрисовки '+Math.min(6,block+1)+'/6\n'+benchmarkSummary();
+  }
   var last = 0, acc = 0, fpsFrames = 0, fpsSince = 0;
   window.__stats = { fps: 0 };
   var debugEl = null, debugAt = 0;
@@ -1217,6 +1306,7 @@
     if (document.hidden) { last = 0; return; }
     var dt = last ? Math.min((now - last) / 1000, 0.1) : 0;
     last = now;
+    if (benchmark) {dt=0;benchmarkTick();}
     if (game.mode === 'play' || game.mode === 'free') {
       acc += dt;
       while (acc >= STEP) { physics(STEP); acc -= STEP; }
@@ -1254,7 +1344,7 @@
     if (debugEl && now - debugAt > 1000) {
       debugAt = now;
       debugEl.textContent = 'FPS: ' + window.__stats.fps + '\nScans: ' + capturedScans.length + '\nPoints: ' + capturedScans.reduce(function (n, s) { return n + s.gpu.n; }, 0) +
-        '\nCar: ' + JSON.stringify(window.__stats.car) + '\nMode: ' + game.mode;
+        '\nDrawn: ' + window.__stats.drawnPoints + ' / calls: ' + window.__stats.drawCalls + ' / CPU ms: ' + window.__stats.renderCpuMs + '\nCar: ' + JSON.stringify(window.__stats.car) + '\nMode: ' + game.mode;
     }
   }
 
@@ -1547,6 +1637,7 @@
     canvas.style.opacity = '1';
     showMenu();
     if (new URLSearchParams(location.search).get('tour') === 'fountains') visitScans();
+    if (benchmark) startGame('free');
     requestAnimationFrame(frame);
   }
   boot().catch(function (err) { statusEl.textContent = 'Ошибка: ' + err.message; console.error(err); });
