@@ -143,6 +143,8 @@
     'in vec2 vXZ;\n' +
     'in float vDist;\n' +
     'uniform sampler2D uGround, uAlbedo;\n' +
+    'uniform vec4 uContact[16];\n' +
+    'uniform int uContactN;\n' +
     'uniform vec4 uFrame;\n' +            // x0, z0, width m, height m
     'uniform float uTime, uFogNear, uFogFar, uLight;\n' + COLOR +
     'out vec4 o;\n' +
@@ -176,8 +178,51 @@
     '    c = mix(vec3(0.33, 0.50, 0.22), sat, 0.6) * (0.85 + 0.3 * h);\n' +
     '    if (h2 > 0.96 && near > 0.0) c = mix(c, vec3(0.80, 0.62, 0.25), near);\n' +
     '  } else if (cat == 7) c = mix(sat, vec3(0.25, 0.58, 0.28), 0.3) * (mod(floor(vXZ.x / 4.0), 2.0) > 0.5 ? 1.0 : 0.9);\n' +
+    '  float contact=0.; for(int i=0;i<16;i++){if(i>=uContactN)break;vec2 d=(vXZ-uContact[i].xy)/uContact[i].zw; contact=max(contact,(1.-smoothstep(.65,1.3,length(d)))*.20); }\n' +
+    '  c*=1.-contact;\n' +
     '  o = vec4(colorize(c * uLight, smoothstep(uFogNear, uFogFar, vDist)), 1.0);\n' +
     '}\n';
+
+  var MESH_VS = `#version 300 es
+    layout(location=0) in vec3 aPos;
+    layout(location=1) in vec3 aNormal;
+    layout(location=2) in vec3 aColor;
+    layout(location=3) in float aMaterial;
+    uniform mat4 uView,uProj;
+    out vec3 vPos,vNormal,vColor;
+    flat out float vMaterial;
+    out float vDistance;
+    void main(){vec4 p=uView*vec4(aPos,1.);gl_Position=uProj*p;
+      vPos=aPos;vNormal=aNormal;vColor=aColor;vMaterial=aMaterial;vDistance=-p.z;}
+  `;
+  var MESH_FS = `#version 300 es
+    precision highp float;
+    in vec3 vPos,vNormal,vColor;
+    flat in float vMaterial;
+    in float vDistance;
+    uniform vec3 uEye;
+    uniform float uFogNear,uFogFar,uLight;
+  ` + COLOR + `
+    out vec4 o;
+    float noise(vec3 p){return fract(sin(dot(floor(p),vec3(17.1,89.7,43.2)))*43758.5453);}
+    void main(){
+      vec3 n=normalize(vNormal);if(!gl_FrontFacing)n=-n;
+      vec3 light=normalize(vec3(-.45,.82,-.32));
+      float shade=.58+.42*max(0.,dot(n,light));
+      vec3 c=vColor;
+      float detail=1.-smoothstep(35.,100.,vDistance);
+      if(vMaterial==1.)c*=mix(1.,.94+.12*noise(vPos*30.),detail);
+      if(vMaterial==4.)c*=mix(1.,.88+.12*step(.08,fract(vPos.x*2.+vPos.z*.25)),detail);
+      if(vMaterial==2.)shade+=.12*pow(max(0.,dot(reflect(-light,n),normalize(uEye-vPos))),20.);
+      if(vMaterial==3.){
+        float f=pow(1.-abs(dot(n,normalize(uEye-vPos))),3.);
+        c=mix(c,vec3(.61,.72,.77),.22+f*.42);
+        shade=.8+.2*max(0.,n.y);
+      }
+      c*=shade*(.78+.22*smoothstep(0.,1.2,vPos.y))*uLight;
+      o=vec4(colorize(c,smoothstep(uFogNear,uFogFar,vDistance)),1.);
+    }
+  `;
 
   function program(vs, fs, names) {
     function sh(type, src) {
@@ -197,7 +242,9 @@
     return u;
   }
   var P = program(PTS_VS, PTS_FS, ['uModel', 'uFocal', 'uMaxPt', 'uAnim', 'uInstanced', 'uDensity']);
-  var G = program(GROUND_VS, GROUND_FS, ['uGround', 'uAlbedo', 'uFrame']);
+  var G = program(GROUND_VS, GROUND_FS, ['uGround', 'uAlbedo', 'uFrame', 'uContact', 'uContactN']);
+  var M = program(MESH_VS, MESH_FS, ['uEye']);
+  var meshes=null, meshContacts=null;
 
   // Point cloud under construction: position, RGBA, world size.
   function Cloud() { this.pos = []; this.col = []; this.size = []; }
@@ -247,6 +294,15 @@
     gl.bindVertexArray(null);
     return {id: ++cloudId, vao: vaos[1], vaos: vaos, n: size.length, center: center, radius: radius, buffers: buffers, instances: gl.createBuffer()};
   }
+
+  function uploadMesh(entry) {
+    var source=ParkMeshes.build(entry),vao=gl.createVertexArray(),buffer=gl.createBuffer();
+    gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,source.data,gl.STATIC_DRAW);
+    [3,3,3,1].forEach(function(size,i){gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,gl.FLOAT,false,40,i*12);});
+    gl.bindVertexArray(null);
+    return {vao:vao,buffer:buffer,n:source.n,center:source.center,radius:source.radius};
+  }
+  function releaseMesh(mesh){gl.deleteVertexArray(mesh.vao);gl.deleteBuffer(mesh.buffer);}
 
   function releaseCloud(c) {
     Object.keys(c.vaos).forEach(function (key) {gl.deleteVertexArray(c.vaos[key]);});
@@ -407,7 +463,8 @@
     // Buildings: walls with a plinth and windows, flat roof; the planetarium
     // gets its dome.
     var WALLS = [[214, 200, 176], [190, 176, 160], [222, 216, 204], [176, 150, 120], [200, 190, 200]], ROOFS = [[120, 70, 60], [90, 90, 96], [140, 100, 80]];
-    park.buildings.forEach(function (b) {
+    park.buildings.forEach(function (b, index) {
+      if(ParkMeshes.buildingIds.indexOf(index)!==-1)return;
       var p = b.pts, h = b.h, wall = WALLS[Math.floor(r() * WALLS.length)], roof = ROOFS[Math.floor(r() * ROOFS.length)];
       if (p.length < 3) return;
       for (var i = 0; i < p.length; i++) {
@@ -436,7 +493,7 @@
       }
     });
 
-    park.rides.forEach(function (ride) { if (ride.name !== 'Круговой обзор') buildRide(cl, r, ride); });
+    park.rides.forEach(function (ride,index) { if (ride.name !== 'Круговой обзор' && ParkMeshes.rideIds.indexOf(index)===-1) buildRide(cl, r, ride); });
     park.fences.forEach(function (f) {
       polyline(f.pts, 0.3, function (x, z, s) {
         var post = (s % 2.5) < 0.3;
@@ -1175,6 +1232,7 @@
     colorUniforms(G);
     gl.uniformMatrix4fv(G.uView, false, view);
     gl.uniformMatrix4fv(G.uProj, false, proj);
+    gl.uniform1i(G.uContactN,meshContacts.length/4);gl.uniform4fv(G.uContact,meshContacts);
     gl.uniform4f(G.uFrame, park.x0, park.z0, park.w * park.mpp, park.h * park.mpp);
     gl.uniform1f(G.uTime, time);
     gl.uniform1f(G.uFogNear, fogNear); gl.uniform1f(G.uFogFar, fogFar);
@@ -1182,6 +1240,18 @@
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, albedoTex); gl.uniform1i(G.uAlbedo, 1);
     gl.bindVertexArray(groundVAO);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    meshes.update(eye[0],eye[2],fogFar+96);
+    gl.useProgram(M.prog);colorUniforms(M);
+    gl.uniformMatrix4fv(M.uView,false,view);gl.uniformMatrix4fv(M.uProj,false,proj);
+    gl.uniform3fv(M.uEye,eye);gl.uniform1f(M.uFogNear,fogNear);gl.uniform1f(M.uFogFar,fogFar);
+    var meshTriangles=0,meshBytes=0;
+    meshes.resident.forEach(function(item){
+      var m=item.value;meshBytes+=m.n*40;
+      if(!ParkPerformance.visible(view,m.center[0],m.center[1],m.center[2],m.radius,fov,canvas.width/canvas.height,fogFar+30))return;
+      gl.bindVertexArray(m.vao);gl.drawArrays(gl.TRIANGLES,0,m.n);meshTriangles+=m.n/3;calls++;
+    });
+    window.__stats.mesh={triangles:meshTriangles,resident:meshes.resident.size,bytes:meshBytes};
 
     gl.useProgram(P.prog);
     colorUniforms(P);
@@ -1361,12 +1431,12 @@
     streamTestError=gl.getError()||streamTestError;
     if(streamTestStage>=streamTestPoses.length) return;
     var pose=streamTestPoses[streamTestStage];car.x=pose[0];car.z=pose[1];car.heading=Math.PI;cam.yaw=Math.PI;
-    if(!world.pending.size) streamTestFrames++;
+    if(!world.pending.size && !meshes.pending.size) streamTestFrames++;
     if(streamTestFrames>60) {
-      streamTestRows.push(Object.assign({stage:streamTestStage},world.stats()));streamTestStage++;streamTestFrames=0;
+      streamTestRows.push(Object.assign({stage:streamTestStage,meshCount:meshes.resident.size,meshEvicted:meshes.evicted},world.stats()));streamTestStage++;streamTestFrames=0;
     }
     streamTestEl.textContent='Streaming route '+streamTestStage+'/4; GL error '+streamTestError+'\n'+streamTestRows.map(function(row) {
-      return row.stage+': '+row.chunks+' chunks; '+(row.bytes/1048576).toFixed(1)+' MiB; loaded '+row.loaded+'; evicted '+row.evicted+'; failures '+row.failures;
+      return row.stage+': '+row.chunks+' chunks; '+(row.bytes/1048576).toFixed(1)+' MiB; loaded '+row.loaded+'; evicted '+row.evicted+'; failures '+row.failures+'; meshes '+row.meshCount+' / evicted '+row.meshEvicted;
     }).join('\n');
   }
   var last = 0, acc = 0, fpsFrames = 0, fpsSince = 0;
@@ -1420,7 +1490,7 @@
     if (debugEl && now - debugAt > 1000) {
       debugAt = now;
       debugEl.textContent = 'FPS: ' + window.__stats.fps + '\nScans: ' + capturedScans.length + '\nPoints: ' + capturedScans.reduce(function (n, s) { return n + s.gpu.n; }, 0) +
-        '\nDrawn: ' + window.__stats.drawnPoints + ' / calls: ' + window.__stats.drawCalls + ' / CPU ms: ' + window.__stats.renderCpuMs + '\nCar: ' + JSON.stringify(window.__stats.car) + '\nMode: ' + game.mode + '\nResident: ' + JSON.stringify(window.__stats.streaming);
+        '\nDrawn: ' + window.__stats.drawnPoints + ' / calls: ' + window.__stats.drawCalls + ' / CPU ms: ' + window.__stats.renderCpuMs + '\nCar: ' + JSON.stringify(window.__stats.car) + '\nMode: ' + game.mode + '\nResident: ' + JSON.stringify(window.__stats.streaming) + '\nMeshes: '+JSON.stringify(window.__stats.mesh);
     }
   }
 
@@ -1625,9 +1695,14 @@
       loadImage('park/ground.png'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261020-stream1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261020-mesh1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
+    var meshEntries=ParkMeshes.entries(park);
+    meshes=new ParkStreaming.Stream(meshEntries,uploadMesh,releaseMesh,2);
+    meshContacts=new Float32Array(meshEntries.flatMap(function(e){
+      var b=bbox(e.pts);return [e.cx,e.cz,Math.max(1,(b[2]-b[0])/2),Math.max(1,(b[3]-b[1])/2)];
+    }));
     park.scans = res[3].scans;
     // Replace the former guessed fountain and clear generated vegetation at
     // the supplied real scan locations before creating geometry or collisions.
@@ -1731,6 +1806,7 @@
     showMenu();
     if (new URLSearchParams(location.search).get('tour') === 'fountains') visitScans();
     if (benchmark || streamTest) startGame('free');
+    if(new URLSearchParams(location.search).get('tour')==='details') visitDetails();
     requestAnimationFrame(frame);
   }
   boot().catch(function (err) { statusEl.textContent = 'Ошибка: ' + err.message; console.error(err); });
@@ -1747,6 +1823,17 @@
     }
     if (!found) throw new Error('Нет свободного подхода к фонтанам');
   }
+  var detailStop=0;
+  function visitDetails(){
+    var stops=[[53,-414,22,-Math.PI/2],[-44,-285,24,0],[-155,-258,32,0],[45,-327,15,Math.PI/2]],target=stops[detailStop++%stops.length];
+    for(var ring=0;ring<12;ring+=2)for(var a=target[3];a<target[3]+Math.PI*2;a+=Math.PI/24){
+      var x=target[0]+Math.sin(a)*(target[2]+ring),z=target[1]-Math.cos(a)*(target[2]+ring),heading=Math.atan2(target[0]-x,-(target[1]-z));
+      if([PATH,PLAZA,ROAD].indexOf(catAt(x,z))===-1||blockedAt(x,z,heading))continue;
+      startGame('free');car.x=x;car.z=z;car.heading=heading;car.v=0;
+      cam.yaw=heading;cam.orbit=0;cam.dist=7;cam.pitch=.15;cam.top=false;return;
+    }
+  }
+  $('visitDetails').addEventListener('click',visitDetails);
   $('visitScans').addEventListener('click', visitScans);
 
   // test hooks: drive and play without a keyboard
