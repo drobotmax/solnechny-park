@@ -27,6 +27,17 @@ with sync_playwright() as p:
     page.click("#free")
     assert page.locator("#panel input[id*=doom]").count() == 0
     page.evaluate("__car.v=0")
+    page.evaluate("""() => {
+      const gl=document.querySelector('#c').getContext('webgl2'),draw=gl.drawArrays.bind(gl);
+      window.__doomFlameDraws=0;
+      gl.drawArrays=(...args)=>{
+        if(document.body.classList.contains('doom')) {
+          const program=gl.getParameter(gl.CURRENT_PROGRAM),mode=gl.getUniformLocation(program,'uMode');
+          if(mode && gl.getUniform(program,mode)===1)__doomFlameDraws++;
+        }
+        return draw(...args);
+      };
+    }""")
     page.keyboard.type("IDDQD", delay=70)
     page.wait_for_function(
         "__doom().active && __doom().horde?.birds.length>0", timeout=30000
@@ -54,6 +65,8 @@ with sync_playwright() as p:
     page.wait_for_function(
         "__doom().music.currentTime<1 && !__doom().music.paused", timeout=10000
     )
+    assert page.evaluate("__doomFlameDraws") > 0
+    assert page.evaluate("document.querySelector('#c').getContext('webgl2').getError()") == 0
     page.screenshot(path=str(out / "doom-horde-guns.png"))
     before = page.evaluate("__doom().horde.birds.slice(0,20).map(d=>[d.x,d.z])")
     page.wait_for_timeout(500)
