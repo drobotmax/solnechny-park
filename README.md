@@ -216,3 +216,20 @@ continue to use the same park data.
 The remaining unidentified ride footprints use low open platforms, fence segments,
 seats, and armatures instead of opaque striped canopy slabs. Their stylized shapes
 should not be taken as exact replicas of the current real-world attractions.
+
+### Verified fixed landmarks
+
+The entrance bridge follows its three OSM ways: the road and two sidewalks no longer
+draw overlapping railings. The sidewalks carry white ring rails and a stone base,
+cross-checked against the 2026 entrance footage and an older Commons photograph.
+The mapped Titan oak now has one broad forked trunk and a low fence instead of two
+overlapping generic trees. Photo dates, licenses, and precision limits are recorded
+in [the reference notes](docs/references/README.md).
+
+### Bridge-to-plaza approach
+
+The entrance road and the mapped pedestrian square use asphalt in the surface map;
+the bridge sidewalks retain their separate paving. The first filmed section of the
+western alley is widened and surfaced as asphalt. Two light trusses and the raised
+planting edge now follow the alley centerline instead of an unrelated straight line.
+Their dimensions remain approximate because the footage is not a measured survey.
