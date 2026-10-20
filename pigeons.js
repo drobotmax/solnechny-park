@@ -89,7 +89,7 @@
           d.walk = null; d.pause = 2;
           var dx = d.homeX - threat.x, dz = d.homeZ - threat.z, distance = Math.hypot(dx, dz);
           if (distance < 0.1) { dx = Math.sin(d.heading); dz = -Math.cos(d.heading); distance = 1; }
-          d.flight = { t: -i * 0.018, dx: dx / distance * 8, dz: dz / distance * 8, back: 0 };
+          d.flight = { t: -i * 0.018, dx: dx / distance * 8, dz: dz / distance * 8, mode: 'up', angle: 0, start: { x: d.x, y: d.y, z: d.z } };
           d.heading = Math.atan2(dx, -dz);
         });
         onTakeoff(group);
@@ -123,13 +123,39 @@
       f.t += dt;
       if (f.t < 0) return;
       var safe = threats.every(function (source) { return Math.hypot(d.homeX - source.x, d.homeZ - source.z) > 7; });
-      if (f.t > 4) f.back = Math.max(0, Math.min(1, f.back + (safe ? dt : -dt) / 1.6));
-      var up = Math.min(1, f.t / 1.2), back = f.back;
-      var travel = up * (1 - back);
-      d.x = d.homeX + f.dx * travel; d.z = d.homeZ + f.dz * travel;
-      d.y = Math.sin(up * Math.PI / 2) * (2.6 + 0.12 * Math.sin(f.t * 4 + d.phase)) * (1 - back);
-      d.heading = back > 0 && safe ? Math.atan2(-f.dx, f.dz) : Math.atan2(f.dx, -f.dz);
-      if (back >= 1) { d.flight = null; d.x = d.homeX; d.z = d.homeZ; d.y = 0; }
+      var oldX = d.x, oldZ = d.z;
+      if (f.mode === 'up') {
+        var up = Math.min(1, f.t / 1.2), ease = up * up * (3 - 2 * up);
+        d.x = f.start.x + (d.homeX + f.dx - f.start.x) * ease;
+        d.z = f.start.z + (d.homeZ + f.dz - f.start.z) * ease;
+        d.y = f.start.y + (2.6 - f.start.y) * Math.sin(up * Math.PI / 2);
+        if (up >= 1) { f.mode = 'circle'; f.angle = 0; }
+      } else if (f.mode === 'circle') {
+        f.angle += dt * 0.9;
+        var c = Math.cos(f.angle), s = Math.sin(f.angle);
+        d.x = d.homeX + f.dx * c - f.dz * s;
+        d.z = d.homeZ + f.dx * s + f.dz * c;
+        d.y = 2.6 + 0.12 * Math.sin(f.t * 4 + d.phase);
+        if (f.angle >= Math.PI * 2 && safe) {
+          f.mode = 'land'; f.returnTime = 0; f.start = { x: d.x, y: d.y, z: d.z };
+        }
+      } else {
+        if (!safe) {
+          var source = threats.find(function (s) { return Math.hypot(d.homeX - s.x, d.homeZ - s.z) <= 7; });
+          var ax = d.x - source.x, az = d.z - source.z, length = Math.hypot(ax, az);
+          if (length < 0.1) { ax = Math.sin(d.heading); az = -Math.cos(d.heading); length = 1; }
+          f.dx = ax / length * 8; f.dz = az / length * 8;
+          f.mode = 'up'; f.t = 0; f.start = { x: d.x, y: d.y, z: d.z };
+        } else {
+          f.returnTime = Math.min(1, f.returnTime + dt / 1.6);
+          var back = f.returnTime * f.returnTime * (3 - 2 * f.returnTime);
+          d.x = f.start.x + (d.homeX - f.start.x) * back;
+          d.z = f.start.z + (d.homeZ - f.start.z) * back;
+          d.y = f.start.y * (1 - back);
+          if (f.returnTime >= 1) { d.flight = null; d.x = d.homeX; d.z = d.homeZ; d.y = 0; }
+        }
+      }
+      if (Math.hypot(d.x - oldX, d.z - oldZ) > 0.001) d.heading = Math.atan2(d.x - oldX, -(d.z - oldZ));
     });
   }
   var api = { shape: shape, create: create, update: update };

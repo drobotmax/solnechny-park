@@ -41,23 +41,26 @@ test('a stroller flushes the whole flock once and birds wait for safe landing', 
   assert.equal(takeoffs, 1);
   assert.ok(g.birds.every(d => d.y > 2 && d.flight));
   car.x = -100; car.z = -100;
-  for (let i = 0; i < 60; i++) Pigeons.update(p, 0.05, car, sound);
+  for (let i = 0; i < 180; i++) Pigeons.update(p, 0.05, car, sound);
   assert.ok(g.birds.every(d => !d.flight && d.y === 0 && d.x === d.homeX && d.z === d.homeZ));
 });
 
 test('an interrupted landing returns to flight smoothly without landing on the player', () => {
   const p = population(), g = p.groups[0], car = { x: g.x, z: g.z, v: 0 };
   const sound = () => {};
-  for (let i = 0; i < 90; i++) Pigeons.update(p, 0.05, car, sound);
+  for (let i = 0; i < 175; i++) Pigeons.update(p, 0.05, car, sound);
   car.x = -100; car.z = -100;
   for (let i = 0; i < 12; i++) Pigeons.update(p, 0.05, car, sound);
   const before = g.birds.map(d => [d.x, d.y, d.z]);
-  car.x = g.x; car.z = g.z;
+  car.x = g.birds[0].x; car.z = g.birds[0].z;
   Pigeons.update(p, 0.05, car, sound);
   g.birds.forEach((d, i) => {
     assert.ok(Math.hypot(d.x - before[i][0], d.y - before[i][1], d.z - before[i][2]) < 0.5);
     assert.ok(d.flight && d.y > 0);
   });
+  const x=g.birds[0].x,z=g.birds[0].z;
+  for(let i=0;i<20;i++)Pigeons.update(p,.05,car,sound);
+  assert.ok(Math.hypot(g.birds[0].x-x,g.birds[0].z-z)>1);
 });
 
 test('both folded pigeon and spread wing clouds have finite geometry', () => {
@@ -121,6 +124,25 @@ test('a nearby dog flushes the flock even with the stroller far away', () => {
   for (let i = 0; i < 120; i++) Pigeons.update(p, 0.05, car, () => {}, [dog]);
   assert.ok(g.birds.some(d => d.flight && d.y > 2));
   dog.x = -100; dog.z = -100;
-  for (let i = 0; i < 70; i++) Pigeons.update(p, 0.05, car, () => {}, [dog]);
+  for (let i = 0; i < 180; i++) Pigeons.update(p, 0.05, car, () => {}, [dog]);
   assert.ok(g.birds.every(d => !d.flight));
+});
+
+
+test('airborne pigeons keep moving around a full circle and return to their takeoff point',()=>{
+ const p=population(),g=p.groups[0],car={x:g.x,z:g.z,v:0},d=p.birds[0];
+ const home=[d.x,d.z];
+ Pigeons.update(p,.05,car,()=>{});
+ for(let i=0;i<30;i++)Pigeons.update(p,.05,car,()=>{});
+ let before=[d.x,d.z],directions=new Set();
+ for(let i=0;i<180;i++) {
+  Pigeons.update(p,.05,car,()=>{});
+  assert.ok(Math.hypot(d.x-before[0],d.z-before[1])>.2,'Bird must not hover');
+  before=[d.x,d.z];directions.add(`${Math.sign(d.x-home[0])},${Math.sign(d.z-home[1])}`);
+ }
+ assert.ok(d.flight&&directions.size>=4);
+ car.x=-100;car.z=-100;
+ for(let i=0;i<80&&d.flight;i++)Pigeons.update(p,.05,car,()=>{});
+ assert.ok(!d.flight&&d.y===0);
+ assert.ok(Math.hypot(d.x-home[0],d.z-home[1])<.01);
 });

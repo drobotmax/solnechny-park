@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+from itertools import pairwise
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -56,17 +57,23 @@ with sync_playwright() as p:
     page.wait_for_timeout(4000)
     assert page.evaluate("__animalCalls.bark.length") == before
     assert page.evaluate("__animalCalls.pant.length") == pant_before
+    barks_before_run = page.evaluate("__animalCalls.bark.length")
     page.evaluate("__dogs().dogs[0].pause=0")
     page.wait_for_function(
         "n=>__animalCalls.pant.length>=n+10", arg=pant_before, timeout=10000
     )
     page.wait_for_timeout(300)
-    assert 0.005 < page.evaluate("__animalPeaks.pant") < 0.11
+    pant_peak = page.evaluate("__animalPeaks.pant")
+    assert 0.005 < pant_peak < 0.2, pant_peak
     intervals = page.evaluate(
         "__animalCalls.pant.slice(-10).slice(1).map((t,i)=>t-__animalCalls.pant.slice(-10)[i])"
     )
-    assert all(0.16 < t < 0.28 for t in intervals), intervals
-    assert page.evaluate("__pantDurations.every(d=>Math.abs(d-.08)<.001)")
+    assert all(0.14 < t < 0.34 for t in intervals), intervals
+    assert max(intervals) - min(intervals) > 0.015, intervals
+    assert page.evaluate("__pantDurations.every(d=>Math.abs(d-.16)<.001)")
+    page.wait_for_function(
+        "n=>__animalCalls.bark.length>n", arg=barks_before_run, timeout=5000
+    )
     page.evaluate("__dogs().dogs[0].pause=1000")
     page.wait_for_timeout(400)
     before = page.evaluate("__animalCalls.pant.length")
@@ -94,6 +101,30 @@ with sync_playwright() as p:
     )
     page.set_viewport_size({"width": 390, "height": 844})
     page.screenshot(path=str(out / "gulls-mobile.png"))
+    # Stand at the takeoff site: the birds must circle continuously, then return.
+    page.evaluate("""() => {
+      const dogs=__dogs().dogs;dogs.forEach(d=>d.pause=1000);
+      const g=__pigeons().groups.find(g=>g.size==='large'&&dogs.every(d=>Math.hypot(d.x-g.x,d.z-g.z)>40));
+      g.birds.forEach(d=>{d.flight=null;d.x=d.homeX;d.z=d.homeZ;d.y=0;d.pause=1000;d.walk=null;});
+      window.__circlingGroup=g;window.__circlingBird=g.birds[0];
+      window.__takeoffHome=[g.birds[0].x,g.birds[0].z];
+      __car.x=g.x;__car.z=g.z;__car.v=0;
+    }""")
+    page.wait_for_function("__circlingBird.flight?.mode==='circle'", timeout=10000)
+    positions = []
+    for _ in range(5):
+        positions.append(page.evaluate("[__circlingBird.x,__circlingBird.z]"))
+        page.wait_for_timeout(500)
+    assert all(
+        ((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5 > 1
+        for a, b in pairwise(positions)
+    ), positions
+    page.wait_for_function("__circlingBird.flight?.angle>Math.PI*2", timeout=15000)
+    page.evaluate("__car.x=__circlingGroup.x-30;__car.z=__circlingGroup.z;__car.v=0")
+    page.wait_for_function("__circlingGroup.birds.every(d=>!d.flight)", timeout=15000)
+    assert page.evaluate(
+        "Math.hypot(__circlingBird.x-__takeoffHome[0],__circlingBird.z-__takeoffHome[1])<.05"
+    )
     # Mute must suppress new animal voices, even with a dive due now.
     page.uncheck("#sound")
     before = page.evaluate("JSON.stringify(__animalCalls)")
