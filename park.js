@@ -63,7 +63,8 @@
     syncDoomMusic();
     if (doomMode) doomHorde = DoomBirds.create([
       { kind: 'waterbird', birds: mallards.birds }, { kind: 'pigeon', birds: pigeons.birds },
-      { kind: 'gull', birds: gulls.birds }, { kind: 'forest', birds: forestBirds.birds }
+      { kind: 'gull', birds: gulls.birds }, { kind: 'forest', birds: forestBirds.birds },
+      { kind: 'small', birds: smallWildlife.birds }
     ], doomGround, rng(901 + doomKills), car);
     $('doomScore').hidden = !doomMode;
     $('modeToast').textContent = doomMode ? 'DOOM ON' : 'DOOM OFF';
@@ -885,6 +886,7 @@
   var ferris = null, jets = null, bottleGPU = null;
   var capturedScans = [];
   var gulls = { birds: [] }, gullGPU = null, gullWingGPU = null, nextGullCry = 0;
+  var smallWildlife = { birds: [], squirrels: [] }, smallGPU = {};
   var nextBark = 3, nextPant = 0;
   var forestBirds = { birds: [], groups: [], woodpeckers: [] }, forestGPU = [], forestWingGPU = [], nextCaw = 4;
   var dogs = { dogs: [] }, dogGPU = [], dogLegGPU = [];
@@ -935,6 +937,38 @@
       ForestBirds.shape(kind, function (x, y, z, c, size, em) { body.add(x, y, z, c, size, em); }, false);
       ForestBirds.shape(kind, function (x, y, z, c, size, em) { wing.add(x, y, z, c, size, em); }, true);
       forestGPU.push(body.upload()); forestWingGPU.push(wing.upload());
+    });
+  }
+  function buildSmallWildlife() {
+    var paved = { groups: pigeons.groups.filter(function (g) { return !!(catRaw(g.x, g.z) & IN_PARK); }),
+      canLand: function (x, z) { var raw = catRaw(x, z); return !!(raw & IN_PARK) && !(raw & UNREACHABLE) && pigeons.canLand(x, z); } };
+    smallWildlife = SmallWildlife.create(park, paved, forestBirds, rng(2017));
+    ['sparrow', 'tit', 'wagtail', 'squirrel'].forEach(function (kind) {
+      smallGPU[kind] = {};
+      var parts = kind === 'squirrel' ? ['body', 'tail', 'nut'] : kind === 'wagtail' ? ['body', 'tail'] : ['body', 'wing', 'tail'];
+      parts.forEach(function (part) {
+        var cloud = new Cloud();
+        SmallWildlife.shape(kind, part, function (x, y, z, color, size, em) { cloud.add(x, y, z, color, size, em); });
+        smallGPU[kind][part] = cloud.upload();
+      });
+    });
+  }
+  function smallBirdCall(d) {
+    if (!actx || actx.state !== 'running' || !state.sound || document.hidden) return;
+    if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
+    var distance = Math.hypot(d.x - car.x, d.z - car.z, d.y), volume = Math.pow(Math.max(0, 1 - distance / 34), 2) * 0.035;
+    var tit = d.species === 'tit', wagtail = d.species === 'wagtail';
+    var notes = tit ? [2600, 1850, 2600, 1850] : wagtail ? [3200, 3800] : [2400, 3100, 2700];
+    notes.forEach(function (frequency, i) {
+      var osc = actx.createOscillator(), gain = actx.createGain(), pan = actx.createStereoPanner();
+      var at = actx.currentTime + i * (tit ? 0.14 : 0.10), duration = wagtail ? 0.07 : 0.09;
+      osc.type = 'triangle'; osc.frequency.setValueAtTime(frequency, at);
+      osc.frequency.exponentialRampToValueAtTime(frequency * (tit ? 0.92 : wagtail ? 0.85 : 1.18), at + duration);
+      gain.gain.setValueAtTime(0, at); gain.gain.linearRampToValueAtTime(volume, at + 0.008); gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+      pan.pan.value = Math.max(-1, Math.min(1, ((d.x - car.x) * Math.cos(car.heading) + (d.z - car.z) * Math.sin(car.heading)) / 18));
+      osc.connect(gain); gain.connect(pan); pan.connect(duckGain);
+      osc.start(at); osc.stop(at + duration);
+      osc.onended = function () { osc.disconnect(); gain.disconnect(); pan.disconnect(); };
     });
   }
   function forestTick(dt) {
@@ -1583,17 +1617,41 @@
         drawCloud(dogLegGPU[d.coat], mat4mul(base, leg), 12);
       }); });
     });
+    function drawSmallAnimal(d) {
+      if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar || d.dead) return;
+      var parts = smallGPU[d.species], squirrel = d.species === 'squirrel';
+      var pitch = squirrel && d.action === 'dig' ? -0.35 + Math.sin(d.phase * 2) * 0.2 : 0;
+      var c = Math.cos(pitch), sn = Math.sin(pitch);
+      var base = mat4mul(yawMat(d.heading, d.x, d.y, d.z), [1, 0, 0, 0, 0, c, sn, 0, 0, -sn, c, 0, 0, 0, 0, 1]);
+      drawCloud(parts.body, base, 10);
+      if (squirrel) {
+        drawCloud(parts.tail, base, 10);
+        if (d.carrying) drawCloud(parts.nut, mat4mul(base, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0.14, -0.18, 1]), 10);
+      } else {
+        var tilt = d.species === 'wagtail' ? Math.sin(d.phase) * 0.4 : 0;
+        var tc = Math.cos(tilt), ts = Math.sin(tilt);
+        drawCloud(parts.tail, mat4mul(base, [1, 0, 0, 0, 0, tc, ts, 0, 0, -ts, tc, 0, 0, 0.085, 0.09, 1]), 10);
+        if (d.flight) [-1, 1].forEach(function (side) {
+          var angle = Math.sin(time * 55 + d.phase) * 0.9, wc = Math.cos(angle), ws = Math.sin(angle);
+          drawCloud(parts.wing, mat4mul(base, [side * wc, ws, 0, 0, -side * ws, wc, 0, 0, 0, 0, 1, 0, side * 0.04, 0.13, 0, 1]), 10);
+        });
+      }
+    }
+    if (!doomMode) smallWildlife.birds.forEach(drawSmallAnimal);
+    smallWildlife.squirrels.forEach(drawSmallAnimal);
     function drawDoomBird(d) {
       if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
       var bird = d.source, gpu;
       if (d.kind === 'waterbird') gpu = duckGPU[bird.species === 'shelduck' ? (bird.male ? 3 : 4) : bird.species === 'coot' ? 2 : bird.male ? 1 : 0];
       else if (d.kind === 'pigeon') gpu = pigeonGPU;
       else if (d.kind === 'gull') gpu = gullGPU;
+      else if (d.kind === 'small') gpu = smallGPU[bird.species].body;
       else gpu = forestGPU[bird.species === 'woodpecker' ? 1 : bird.species === 'crow' ? 2 : 0];
       var y = d.dead ? 0.025 : (d.kind === 'gull' ? 0.13 : 0.01) + Math.abs(Math.sin(d.phase)) * 0.035;
       var base = yawMat(d.heading, d.x, y, d.z);
       if (d.dead) base = mat4mul(base, [1.2, 0, 0, 0, 0, 0.16, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
       drawCloud(gpu, base, 12);
+      if (d.kind === 'small') drawCloud(smallGPU[bird.species].tail, mat4mul(base, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0.085, 0.09, 1]), 10);
     }
     if (doomMode && doomHorde) doomHorde.birds.forEach(function (d) { if (!d.dead) drawDoomBird(d); });
     doomCorpses.forEach(drawDoomBird);
@@ -1714,6 +1772,7 @@
     if (game.mode === 'play' || game.mode === 'free') {
       Dogs.update(dogs, dt, car);
       dogSoundTick(dt);
+      SmallWildlife.update(smallWildlife, dt, car, dogs.dogs, smallBirdCall, !doomMode);
       if (!doomMode) forestTick(dt);
       nextGullCry -= dt;
       if (!doomMode) Gulls.update(gulls, dt, function (d) {
@@ -2055,6 +2114,7 @@
     buildDogs();
     buildGulls();
     buildForestBirds();
+    buildSmallWildlife();
     buildDoomGuns();
     respawn();
     place();
@@ -2100,6 +2160,7 @@
   window.__mallards = function () { return mallards; };
   window.__pigeons = function () { return pigeons; };
   window.__forestBirds = function () { return forestBirds; };
+  window.__smallWildlife = function () { return smallWildlife; };
   window.__doom = function () { return { active: doomMode, music: doomMusic, horde: doomHorde, corpses: doomCorpses, kills: doomKills }; };
   window.__gulls = function () { return gulls; };
   window.__dogs = function () { return dogs; };

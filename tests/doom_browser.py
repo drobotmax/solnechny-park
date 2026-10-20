@@ -43,10 +43,10 @@ with sync_playwright() as p:
         "__doom().active && __doom().horde?.birds.length>0", timeout=30000
     )
     data = page.evaluate("""() => {const d=__doom();return {count:d.horde.birds.length,
-      expected:__mallards().birds.length+__pigeons().birds.length+__gulls().birds.length+__forestBirds().birds.length,
+      expected:__mallards().birds.length+__pigeons().birds.length+__gulls().birds.length+__forestBirds().birds.length+__smallWildlife().birds.length,
       kinds:[...new Set(d.horde.birds.map(b=>b.kind))],valid:d.horde.birds.every(b=>d.horde.canStand(b.x,b.z))};}""")
     assert (
-        data["count"] == data["expected"] and len(data["kinds"]) == 4 and data["valid"]
+        data["count"] == data["expected"] and len(data["kinds"]) == 5 and data["valid"]
     ), data
     page.wait_for_function(
         "__doom().music.currentTime>.3 && !__doom().music.paused", timeout=20000
