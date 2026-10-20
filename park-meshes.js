@@ -1,12 +1,14 @@
 // Small, reference-led mesh set. All dimensions are approximate within OSM footprints.
 (function(root){
 'use strict';
-const buildingIds=[3,5,6,7,49,50,81], rideIds=[0,1,2,36];
+const buildingIds=[3,5,6,7,49,50,81], rideIds=[0,1,2,6,9,17,25,26,27,36];
 const C={cream:[.80,.75,.63],trim:[.92,.89,.80],roof:[.28,.20,.16],glass:[.18,.30,.33],red:[.68,.12,.10],steel:[.57,.60,.58],gold:[.73,.53,.20],dark:[.12,.15,.15]};
 function center(p){return p.reduce((a,b)=>[a[0]+b[0]/p.length,a[1]+b[1]/p.length],[0,0]);}
 function entries(park){
  return buildingIds.map(i=>{const b=park.buildings[i],c=center(b.pts);return {id:'b'+i,cx:c[0],cz:c[1],kind:'building',pts:b.pts,h:i===81?8:b.h,style:i===81?'colonnade':'cafe'};})
- .concat(rideIds.map(i=>{const r=park.rides[i],c=center(r.pts);return {id:'r'+i,cx:c[0],cz:c[1],kind:i===1?'coaster':i===36?'carousel':'bumper',pts:r.pts};}));
+ .concat(rideIds.map(i=>{const r=park.rides[i],c=center(r.pts);
+  const kind=i===1?'coaster':i===36?'carousel':i===0||i===2?'bumper':i===17?'train':i===26?'swingTower':i===27?'pendulum':'spinner';
+  return {id:'r'+i,cx:c[0],cz:c[1],kind,pts:r.pts};}));
 }
 function Geometry(){this.data=[];}
 Geometry.prototype.tri=function(a,b,c,color,mat){
@@ -127,8 +129,83 @@ function coaster(g,e){
  for(const dx of [-4,4])for(const dz of [-1.6,1.6])g.beam([q[0]+dx,.35,q[2]+dz],[q[0]+dx,3,q[2]+dz],.09,C.steel,2);
  g.box(q[0],3,q[2],9,.18,4,C.red,2);
 }
+function rideRadius(e){return Math.min(...e.pts.map(p=>Math.hypot(p[0]-e.cx,p[1]-e.cz)))*.67;}
+function deckAndRail(g,e){
+ const c=[e.cx,e.cz],p=e.pts;
+ for(let i=0;i<p.length;i++){
+  const a=p[i],b=p[(i+1)%p.length],f=edgeFrame(p,i);
+  g.tri([a[0],.12,a[1]],[b[0],.12,b[1]],[c[0],.12,c[1]],C.dark,0);
+  if(!f.len)continue;
+  for(let s=0;s<=f.len;s+=2.5){const x=a[0]+f.ux*s,z=a[1]+f.uz*s;g.beam([x,.12,z],[x,1,z],.045,C.steel,2,4);}
+  // Leave the middle of the first edge open for the entrance.
+  if(i===0&&f.len>3){
+   const m=f.len*.5,at=s=>[a[0]+f.ux*s,.93,a[1]+f.uz*s];
+   g.beam(at(0),at(m-1.1),.045,C.steel,2,4);
+   g.beam(at(m+1.1),at(f.len),.045,C.steel,2,4);
+  }else g.beam([a[0],.93,a[1]],[b[0],.93,b[1]],.045,C.steel,2,4);
+ }
+}
+function spinner(g,e){
+ deckAndRail(g,e);
+ const x=e.cx,z=e.cz,r=Math.max(2,rideRadius(e)*.72),arms=e.id==='r25'?6:8;
+ g.box(x,.13,z,1.7,.35,1.7,C.cream,1);
+ g.beam([x,.45,z],[x,1.3,z],.35,C.steel,2,10);
+ for(let i=0;i<arms;i++){
+  const a=i*Math.PI*2/arms,ux=Math.cos(a),uz=Math.sin(a),px=x+ux*r,pz=z+uz*r;
+  g.beam([x,1.05,z],[px,.8,pz],.11,C.steel,2);
+  g.box(px,.34,pz,1.2,.42,.86,i%2?C.cream:C.red,2);
+  g.box(px,.77,pz,.85,.38,.16,C.dark,0);
+  g.beam([px-uz*.35,.75,pz+ux*.35],[px+uz*.35,.75,pz-ux*.35],.04,C.trim,2,4);
+ }
+}
+function train(g,e){
+ const x=e.cx,z=e.cz,xs=e.pts.map(p=>p[0]),zs=e.pts.map(p=>p[1]);
+ const rx=(Math.max(...xs)-Math.min(...xs))*.39,rz=(Math.max(...zs)-Math.min(...zs))*.39,n=64;
+ const at=(t,side)=>{const a=t*Math.PI*2,r=side?1.06:.94;
+  return [x+Math.cos(a)*rx*r,.55+.28*Math.sin(a*2),z+Math.sin(a)*rz*r];};
+ for(let i=0;i<n;i++){
+  for(const side of [0,1])g.beam(at(i/n,side),at((i+1)/n,side),.075,C.steel,2,4);
+  if(i%2===0)g.beam(at(i/n,0),at(i/n,1),.055,C.cream,1,4);
+  if(i%8===0){const q=at(i/n,0);g.beam([q[0],.1,q[2]],q,.065,C.steel,2,4);}
+ }
+ for(let i=0;i<4;i++){
+  const q=at(.60+i*.028,0),a=(.60+i*.028)*Math.PI*2;
+  g.box(q[0],.55,q[2],1.25,.54,.85,i%2?C.cream:C.red,2);
+  g.beam([q[0],1.09,q[2]],[q[0],1.47,q[2]],.04,C.steel,2,4);
+  g.box(q[0],1.47,q[2],1.35,.10,.93,C.roof,2);
+ }
+}
+function swingTower(g,e){
+ deckAndRail(g,e);
+ const x=e.cx,z=e.cz,r=Math.max(2,rideRadius(e)*.78),h=10.5;
+ g.beam([x,.12,z],[x,h,z],.27,C.steel,2,10);
+ g.box(x,h-.4,z,1.5,.45,1.5,C.red,2);
+ for(let i=0;i<10;i++){
+  const a=i*Math.PI/5,ux=Math.cos(a),uz=Math.sin(a),sx=x+ux*r,sz=z+uz*r;
+  g.beam([x,h-.4,z],[sx,h-.8,sz],.075,C.trim,2);
+  for(const offset of [-.18,.18])g.beam([sx-uz*offset,h-.8,sz+ux*offset],[sx-uz*offset*1.8,5.2,sz+ux*offset*1.8],.015,C.steel,2,4);
+  g.box(sx,4.9,sz,.8,.32,.5,i%2?C.cream:C.red,2);
+ }
+}
+function pendulum(g,e){
+ deckAndRail(g,e);
+ const x=e.cx,z=e.cz,r=Math.max(2,rideRadius(e)*.58),h=9.4;
+ for(const side of [-1,1]){
+  const px=x+side*r;
+  g.beam([px,.12,z-r*.62],[px,h,z],.13,C.steel,2);
+  g.beam([px,.12,z+r*.62],[px,h,z],.13,C.steel,2);
+ }
+ g.beam([x-r,h,z],[x+r,h,z],.19,C.red,2);
+ g.beam([x,h,z],[x,3,z],.16,C.steel,2);
+ g.box(x,2.7,z,r*1.25,.52,.9,C.red,2);
+ for(let i=-2;i<=2;i++){
+  const px=x+i*r*.22;
+  g.box(px,3.18,z,.44,.32,.24,C.dark,0);
+  g.beam([px,3.2,z-.4],[px,3.65,z-.4],.035,C.trim,2,4);
+ }
+}
 function build(e){
- const g=new Geometry();({building,bumper,carousel,coaster}[e.kind])(g,e);
+ const g=new Geometry();({building,bumper,carousel,coaster,spinner,train,swingTower,pendulum}[e.kind])(g,e);
  const data=new Float32Array(g.data);let radius=0;
  for(let i=0;i<data.length;i+=10)radius=Math.max(radius,Math.hypot(data[i]-e.cx,data[i+1]-5,data[i+2]-e.cz));
  return {data,n:data.length/10,center:[e.cx,5,e.cz],radius};
