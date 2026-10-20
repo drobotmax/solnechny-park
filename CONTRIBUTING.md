@@ -27,6 +27,7 @@ node --check capture-scenes.js
 node --check mallards.js
 node --check pigeons.js
 node --check dogs.js
+node --check gulls.js
 node --test tests/*.test.js
 python3 -m http.server 8791 --bind 127.0.0.1
 ```
@@ -43,6 +44,9 @@ python3 -m http.server 8791 --bind 127.0.0.1
 длительности до 0,7 секунды, пауз 8–14 секунд и отключения
 звука: `python3 tests/pigeon_audio_browser.py`. Она измеряет выход настоящего
 Web Audio после пространственного ослабления, без подмены звукового источника.
+
+Лай, дыхание собак только во время бега, пикирование и крик чаек, а также
+удаление скамеек проверяет `python3 tests/animals_browser.py`.
 
 Проверьте игру, просмотрщик и свою сцену. В pull request приложите скриншот результата, перечислите файлы и ограничения. Коммиты и комментарии в коде — на английском; описания для участников — на русском. Не делайте прямые изменения main.
 

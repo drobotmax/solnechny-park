@@ -422,17 +422,11 @@
       }
     });
     park.props.forEach(function (p) {
-      var kind = p[0], x = p[1], z = p[2], ang = p[3], ux = Math.sin(ang), uz = -Math.cos(ang), y;
+      var kind = p[0], x = p[1], z = p[2], y;
       if (kind === 'lamp') {
         for (y = 0; y < 4; y += 0.12) cl.add(x, y, z, [52, 52, 56], 0.07, false);
         cl.add(x, 4.1, z, [255, 226, 160], 0.32, true);
         cl.add(x, 3.95, z, [255, 210, 130], 0.22, true);
-      } else {
-        for (var s = -0.8; s <= 0.8; s += 0.08) {
-          cl.add(x + ux * s, 0.45, z + uz * s, [130, 88, 52], 0.07, false);
-          cl.add(x + ux * s - uz * 0.18, 0.75, z + uz * s + ux * 0.18, [120, 80, 48], 0.07, false);
-          if (Math.abs(Math.abs(s) - 0.7) < 0.05) for (y = 0; y < 0.45; y += 0.08) cl.add(x + ux * s, y, z + uz * s, [40, 40, 42], 0.05, false);
-        }
       }
     });
     park.landmarks.forEach(function (lm) { buildLandmark(cl, r, lm); });
@@ -592,6 +586,8 @@
   var park = null, cats = null, groundTex = null, albedoTex = null, groundVAO = null, world = null, stroller = null;
   var ferris = null, jets = null, bottleGPU = null;
   var capturedScans = [];
+  var gulls = { birds: [] }, gullGPU = null, gullWingGPU = null, nextGullCry = 0;
+  var nextBark = 6, nextPant = 0;
   var dogs = { dogs: [] }, dogGPU = [], dogLegGPU = [];
   var pigeons = { groups: [], birds: [] }, pigeonGPU = null, wingGPU = null, nextCoo = 2;
   var mallards = { groups: [], ducks: [], coots: [], birds: [] }, duckGPU = [], duckTime = 0, nextQuack = 3, nextCoot = 8;
@@ -614,6 +610,25 @@
     Pigeons.shape(function (x, y, z, c, s, em) { body.add(x, y, z, c, s, em); }, false);
     Pigeons.shape(function (x, y, z, c, s, em) { wing.add(x, y, z, c, s, em); }, true);
     pigeonGPU = body.upload(); wingGPU = wing.upload();
+  }
+
+  function buildGulls() {
+    gulls = Gulls.create(mallards.groups, rng(941));
+    var body = new Cloud(), wing = new Cloud();
+    Gulls.shape(function (x, y, z, c, size, em) { body.add(x, y, z, c, size, em); }, false);
+    Gulls.shape(function (x, y, z, c, size, em) { wing.add(x, y, z, c, size, em); }, true);
+    gullGPU = body.upload(); gullWingGPU = wing.upload();
+  }
+  function dogSoundTick(dt) {
+    if (!state.sound || !actx || actx.state !== 'running' || document.hidden) return;
+    nextBark -= dt; nextPant -= dt;
+    var nearby = dogs.dogs.filter(function (d) { return Math.hypot(d.x - car.x, d.z - car.z) < 28; });
+    if (nextBark <= 0) {
+      nextBark = nearby.length ? 18 + Math.random() * 17 : 2;
+      if (nearby.length) animalSound(nearby[0], 'bark');
+    }
+    var runner = nearby.find(function (d) { return d.v > 0.5 && Math.hypot(d.x - car.x, d.z - car.z) < 18; });
+    if (nextPant <= 0 && runner) { animalSound(runner, 'pant'); nextPant = 0.55; }
   }
 
   function buildDogs() {
@@ -642,7 +657,7 @@
       return true;
     }
     nextQuack -= dt; nextCoot -= dt;
-    if (nextQuack <= 0) nextQuack = callNearby(mallards.ducks) ? 6 + Math.random() * 7 : 2;
+    if (nextQuack <= 0) nextQuack = callNearby(mallards.ducks) ? 4 + Math.random() * 4 : 2;
     if (nextCoot <= 0) nextCoot = callNearby(mallards.coots) ? 15 + Math.random() * 13 : 3;
     nextCoo -= dt;
     if (nextCoo <= 0) {
@@ -894,6 +909,35 @@
     source.onended = function () { source.disconnect(); gain.disconnect(); pan.disconnect(); cooVoice = null; };
     return true;
   }
+  function animalSound(d, kind) {
+    if (!actx || actx.state !== 'running' || !state.sound || document.hidden) return;
+    if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
+    var pant = kind === 'pant', gull = kind === 'gull';
+    var duration = pant ? 0.24 : gull ? 0.7 : 0.28;
+    var source, filter = actx.createBiquadFilter(), gain = actx.createGain(), pan = actx.createStereoPanner();
+    var now = actx.currentTime, distance = Math.hypot(d.x - car.x, d.z - car.z, d.y || 0);
+    var range = pant ? 18 : gull ? 48 : 32;
+    var volume = Math.pow(Math.max(0, 1 - distance / range), 2) * (pant ? 0.38 : gull ? 0.09 : 0.14);
+    if (pant) {
+      // Low-rate, quantized noise keeps breathing in the same lo-fi palette.
+      var buffer = actx.createBuffer(1, Math.ceil(8000 * duration), 8000), samples = buffer.getChannelData(0);
+      for (var i = 0; i < samples.length; i++) samples[i] = Math.round((Math.random() * 2 - 1) * 7) / 7;
+      source = actx.createBufferSource(); source.buffer = buffer;
+    } else {
+      source = actx.createOscillator(); source.type = 'square';
+      source.frequency.setValueAtTime(gull ? 1050 : 180, now);
+      source.frequency.exponentialRampToValueAtTime(gull ? 1700 : 100, now + duration * 0.25);
+      source.frequency.exponentialRampToValueAtTime(gull ? 750 : 65, now + duration);
+    }
+    filter.type = 'bandpass'; filter.frequency.value = pant ? 1400 : gull ? 1900 : 650; filter.Q.value = pant ? 0.6 : 1;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(volume, now + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    pan.pan.value = Math.sin(Math.atan2(d.x - car.x, -(d.z - car.z)) - cam.yaw - cam.orbit);
+    source.connect(filter); filter.connect(gain); gain.connect(pan); pan.connect(duckGain);
+    source.start(now); source.stop(now + duration);
+    source.onended = function () { source.disconnect(); filter.disconnect(); gain.disconnect(); pan.disconnect(); };
+  }
   function flapSound(group) {
     if (!actx || actx.state !== 'running' || !state.sound || document.hidden) return;
     if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
@@ -1042,6 +1086,18 @@
         });
       }
     });
+    gulls.birds.forEach(function (d) {
+      if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
+      var c = Math.cos(d.pitch), s = Math.sin(d.pitch);
+      var base = mat4mul(yawMat(d.heading, d.x, d.y, d.z), [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
+      drawCloud(gullGPU, base, 12);
+      var fold = d.dive !== null && d.dive < 2 ? 0.6 : 0;
+      var angle = fold + Math.sin(d.wing) * (fold ? 0.12 : 0.28), wc = Math.cos(angle), ws = Math.sin(angle);
+      [-1, 1].forEach(function (side) {
+        var wing = [side * wc, ws, 0, 0, -side * ws, wc, 0, 0, 0, 0, 1, 0, side * 0.045, 0.025, 0, 1];
+        drawCloud(gullWingGPU, mat4mul(base, wing), 12);
+      });
+    });
     dogs.dogs.forEach(function (d) {
       if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
       var bob = d.v > 0 ? 0.0125 * (1 + Math.sin(d.phase * 2)) : 0;
@@ -1098,6 +1154,13 @@
     duckTick(dt);
     if (game.mode === 'play' || game.mode === 'free') {
       Dogs.update(dogs, dt, car);
+      dogSoundTick(dt);
+      nextGullCry -= dt;
+      Gulls.update(gulls, dt, function (d) {
+        if (nextGullCry <= 0 && Math.hypot(d.x - car.x, d.z - car.z) < 48) {
+          animalSound(d, 'gull'); nextGullCry = 8;
+        }
+      });
       Pigeons.update(pigeons, dt, car, flapSound, dogs.dogs);
     }
     draw(now);
@@ -1395,6 +1458,7 @@
 
     buildPigeons();
     buildDogs();
+    buildGulls();
     respawn();
     place();
     statusEl.style.display = 'none';
@@ -1425,5 +1489,6 @@
   window.__visitScans = visitScans;
   window.__mallards = function () { return mallards; };
   window.__pigeons = function () { return pigeons; };
+  window.__gulls = function () { return gulls; };
   window.__dogs = function () { return dogs; };
 })();
