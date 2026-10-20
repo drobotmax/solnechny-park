@@ -7,7 +7,7 @@
 // tools/gen_park.py at 0.4 m per cell: surface categories from OpenStreetMap
 // plus tree cover classified from satellite imagery (ground.png) and the
 // satellite colour itself (albedo.jpg). Trees, buildings, rides and props are
-// point clouds generated here from park/park.json, so they read the same as
+// point clouds baked from park/park.json and streamed by sector, matching
 // the scanned stroller.
 (function () {
   'use strict';
@@ -245,7 +245,20 @@
     var center=lo.map(function (v,i) {return size.length ? (v+hi[i])/2 : 0;});
     var radius=size.length ? Math.hypot(hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2])/2+2 : 0;
     gl.bindVertexArray(null);
-    return {id: ++cloudId, vao: vaos[1], vaos: vaos, n: size.length, center: center, radius: radius, instances: gl.createBuffer()};
+    return {id: ++cloudId, vao: vaos[1], vaos: vaos, n: size.length, center: center, radius: radius, buffers: buffers, instances: gl.createBuffer()};
+  }
+
+  function releaseCloud(c) {
+    Object.keys(c.vaos).forEach(function (key) {gl.deleteVertexArray(c.vaos[key]);});
+    c.buffers.forEach(function (buffer) {gl.deleteBuffer(buffer);});
+    gl.deleteBuffer(c.instances);
+  }
+  async function loadPackedCloud(entry, signal) {
+    var response=await fetch(entry.src,{signal:signal});
+    if(!response.ok) throw new Error(entry.src+' '+response.status);
+    var bytes=await SPZ.gunzip(await response.arrayBuffer());
+    if(signal && signal.aborted) throw new DOMException('Aborted','AbortError');
+    return ParkStreaming.decode(bytes);
   }
 
   // ------------------------------------------------------------ stroller ---
@@ -377,12 +390,13 @@
     for (var i = 0; i < CROWNS.length; i++) { acc += CROWNS[i][1]; if (pick < acc) { base = CROWNS[i][0]; break; } }
     var cy = trunkTop + (h - trunkTop) * 0.5, ry = (h - trunkTop) * 0.55;
     var n = Math.round(50 + cr * 16);
+    var slender = r() < 0.16, spread = 0.85 + r()*0.3;
     for (var j = 0; j < n; j++) {
       // uniform direction, radius biased to the surface
       var u = r() * 2 - 1, th = r() * 6.2832, s = Math.sqrt(1 - u * u), rad = 0.55 + 0.45 * Math.cbrt(r());
       var dx = s * Math.cos(th) * rad, dy = u * rad, dz = s * Math.sin(th) * rad;
       var shade = (0.68 + 0.45 * (dy * 0.5 + 0.5)) * (0.85 + 0.3 * r());   // lighter on top
-      cl.add(x + dx * cr, cy + dy * ry, z + dz * cr, mul(base, shade), 0.45 + r() * 0.45, false);
+      cl.add(x + dx * cr * (slender ? 0.55 : spread), cy + dy * ry * (slender ? 1.25 : 1), z + dz * cr, mul(base, shade), 0.45 + r() * 0.45, false);
     }
   }
 
@@ -406,6 +420,10 @@
           }
         }
       }
+      polyline(p.concat([p[0]]), 0.22, function(x,z) {
+        cl.add(x,h,z,mul(wall,1.12),0.20,false);
+        cl.add(x,0.22,z,[112,109,100],0.20,false);
+      });
       var bb = bbox(p);
       if (b.dome) {
         var cx = (bb[0] + bb[2]) / 2, cz = (bb[1] + bb[3]) / 2, R = Math.min(bb[2] - bb[0], bb[3] - bb[1]) / 2;
@@ -453,7 +471,37 @@
       }
     });
     park.landmarks.forEach(function (lm) { buildLandmark(cl, r, lm); });
+    buildEntranceDetails(cl, r);
     return cl.upload();
+  }
+
+  // Stylized alignment from the user's plaza/alley contact sheets, not a survey.
+  function buildEntranceDetails(cl, r) {
+    [-5,21].forEach(function (x) {
+      var z=-402;
+      [-0.65,0.65].forEach(function (dx) {[-0.65,0.65].forEach(function (dz) {
+        for(var y=0;y<10;y+=.16) cl.add(x+dx,y,z+dz,[174,181,180],.09,false);
+      });});
+      for(var y=1;y<=10;y+=1.5) for(var t=-.65;t<=.65;t+=.13) {
+        cl.add(x+t,y,z-.65,[120,128,127],.065,false);cl.add(x+t,y,z+.65,[120,128,127],.065,false);
+      }
+      for(var dx=-1;dx<=1;dx+=.5) {cl.add(x+dx,9.5,z-.8,[54,58,58],.22,false);cl.add(x+dx,9.5,z+.8,[54,58,58],.22,false);}
+      for(var y=1.2;y<5.3;y+=.22) for(var dx=-.5;dx<=.5;dx+=.22) cl.add(x+dx,y,z,[139,163,99],.15,false);
+    });
+    // Low stone planting edges and clipped conifers along the main approach.
+    [-5,21].forEach(function (edge) {
+      for(var z=-394;z<-335;z+=.25) {
+        var x=edge-(z+394)*.19;
+        for(var y=.1;y<.5;y+=.16) cl.add(x,y,z,mul([135,133,118],.85+r()*.3),.16,false);
+      }
+      for(var z=-388;z<-340;z+=9) {
+        var x=edge-(z+394)*.19+(edge<0?-1.3:1.3);
+        for(var y=.3;y<5.5;y+=.18) for(var a=0;a<6.28;a+=.55) {
+          var rad=(1-y/5.8)*.95;
+          cl.add(x+Math.cos(a)*rad,y,z+Math.sin(a)*rad,mul([40,69,37],.85+r()*.35),.24,false);
+        }
+      }
+    });
   }
 
   function bbox(p) {
@@ -1176,7 +1224,13 @@
     var reach = fogFar + CHUNK * 0.75;
     gl.uniform1f(P.uMaxPt, 48);
     gl.uniformMatrix4fv(P.uModel, false, IDENT);
-    world.chunks.forEach(function (ch) {
+    world.update(eye[0],eye[2],fogFar+CHUNK*1.5);
+    window.__stats.streaming=world.stats();
+    var notice=document.getElementById('streamNotice');
+    notice.hidden=!world.failed.size;
+    notice.textContent=world.failed.size ? 'Часть парка не загрузилась. Повторяем загрузку…' : '';
+    world.resident.forEach(function (item) {
+      var ch=item.value;
       var dx = ch.cx - eye[0], dz = ch.cz - eye[2];
       if (dx * dx + dz * dz > reach * reach) return;
       if ((dx * cfx + dz * cfz) < -CHUNK && !cam.top) return;          // behind the camera
@@ -1286,6 +1340,7 @@
     var pose=benchmarkPoses[Math.floor(block/2)];optimized=block%2===1;
     game.mode='free';car.x=pose[0];car.z=pose[1];car.heading=pose[2];car.v=0;
     cam.yaw=pose[2];cam.orbit=0;cam.pitch=.28;cam.dist=8;cam.top=false;
+    if(world.pending.size) return;
     if(benchmarkFrame%120>=30)benchmarkSamples.push([window.__stats.drawnPoints||0,window.__stats.drawCalls||0,window.__stats.renderCpuMs||0]);
     benchmarkFrame++;
     if(benchmarkFrame%120===0) {
@@ -1293,6 +1348,26 @@
       benchmarkRows.push({scene:Math.floor(block/2),optimized:optimized,points:avg[0],calls:avg[1],cpuMs:avg[2]});benchmarkSamples=[];
     }
     benchmarkEl.textContent='Сравнение отрисовки '+Math.min(6,block+1)+'/6\n'+benchmarkSummary();
+  }
+  var streamTest=new URLSearchParams(location.search).get('streamtest')==='1';
+  var streamTestStage=0, streamTestFrames=0, streamTestRows=[], streamTestEl=null, streamTestError=0;
+  var streamTestPoses=[[8.25,-415.7],[122,567],[248,-69],[8.25,-415.7]];
+  function streamTestTick() {
+    if(!streamTestEl) {
+      streamTestEl=document.createElement('pre');
+      streamTestEl.style.cssText='position:fixed;right:12px;top:12px;background:#111e;color:#fff;padding:12px;z-index:50;font:12px monospace';
+      document.body.appendChild(streamTestEl);
+    }
+    streamTestError=gl.getError()||streamTestError;
+    if(streamTestStage>=streamTestPoses.length) return;
+    var pose=streamTestPoses[streamTestStage];car.x=pose[0];car.z=pose[1];car.heading=Math.PI;cam.yaw=Math.PI;
+    if(!world.pending.size) streamTestFrames++;
+    if(streamTestFrames>60) {
+      streamTestRows.push(Object.assign({stage:streamTestStage},world.stats()));streamTestStage++;streamTestFrames=0;
+    }
+    streamTestEl.textContent='Streaming route '+streamTestStage+'/4; GL error '+streamTestError+'\n'+streamTestRows.map(function(row) {
+      return row.stage+': '+row.chunks+' chunks; '+(row.bytes/1048576).toFixed(1)+' MiB; loaded '+row.loaded+'; evicted '+row.evicted+'; failures '+row.failures;
+    }).join('\n');
   }
   var last = 0, acc = 0, fpsFrames = 0, fpsSince = 0;
   window.__stats = { fps: 0 };
@@ -1307,6 +1382,7 @@
     var dt = last ? Math.min((now - last) / 1000, 0.1) : 0;
     last = now;
     if (benchmark) {dt=0;benchmarkTick();}
+    if (streamTest) {dt=0;streamTestTick();}
     if (game.mode === 'play' || game.mode === 'free') {
       acc += dt;
       while (acc >= STEP) { physics(STEP); acc -= STEP; }
@@ -1344,7 +1420,7 @@
     if (debugEl && now - debugAt > 1000) {
       debugAt = now;
       debugEl.textContent = 'FPS: ' + window.__stats.fps + '\nScans: ' + capturedScans.length + '\nPoints: ' + capturedScans.reduce(function (n, s) { return n + s.gpu.n; }, 0) +
-        '\nDrawn: ' + window.__stats.drawnPoints + ' / calls: ' + window.__stats.drawCalls + ' / CPU ms: ' + window.__stats.renderCpuMs + '\nCar: ' + JSON.stringify(window.__stats.car) + '\nMode: ' + game.mode;
+        '\nDrawn: ' + window.__stats.drawnPoints + ' / calls: ' + window.__stats.drawCalls + ' / CPU ms: ' + window.__stats.renderCpuMs + '\nCar: ' + JSON.stringify(window.__stats.car) + '\nMode: ' + game.mode + '\nResident: ' + JSON.stringify(window.__stats.streaming);
     }
   }
 
@@ -1549,6 +1625,7 @@
       loadImage('park/ground.png'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
+      fetch('park/stream-manifest.json?v=20261020-stream1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     park.scans = res[3].scans;
@@ -1578,6 +1655,7 @@
     });
     groundTex = texture(0, gl.R8, gl.RED, park.w, park.h, cats);
     albedoTex = texture(1, gl.RGB8, gl.RGB, 0, 0, null, res[2]);
+    rgba=null; cv.width=cv.height=1; res[1]=res[2]=null;
 
     var X0 = park.x0, Z0 = park.z0, X1 = park.x0 + park.w * park.mpp, Z1 = park.z0 + park.h * park.mpp;
     groundVAO = gl.createVertexArray();
@@ -1588,10 +1666,23 @@
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     gl.bindVertexArray(null);
 
-    statusEl.textContent = 'Сажаем деревья…';
+    statusEl.textContent = 'Загрузка ближайших участков…';
     await new Promise(function (r) { setTimeout(r, 0); });
     var r = rng(5);
-    world = buildWorld(park);
+    world = new ParkStreaming.Stream(res[4].chunks, async function(entry,signal) {
+      var c=await loadPackedCloud(entry,signal);
+      var gpu=cloudVAO(c.pos,c.col,c.size);gpu.cx=entry.cx;gpu.cz=entry.cz;return gpu;
+    }, releaseCloud, 2);
+    var initial=park.start;
+    if(new URLSearchParams(location.search).get('tour')==='fountains') initial=park.scans[1].at;
+    var warmStart=performance.now();
+    while(true) {
+      world.update(initial[0],initial[1],220);
+      if(world.failed.size) throw new Error('Не загрузился участок парка. Обновите страницу.');
+      if(!world.pending.size) break;
+      if(performance.now()-warmStart>45000) throw new Error('Медленная загрузка парка. Обновите страницу.');
+      await new Promise(function(resolve) {setTimeout(resolve,16);});
+    }
     park.landmarks.forEach(function (lm) {
       if (lm.kind === 'wheel') ferris = buildWheel(lm, r);
       if (lm.kind === 'fountain') jets = buildFountainJets(lm, r);
@@ -1600,7 +1691,7 @@
     buildMallards();
     indexTrunks(park.trees);
     buildMap();
-    window.__stats.worldPoints = world.n;
+    window.__stats.worldPoints = res[4].worldPoints;
 
     statusEl.textContent = 'Загрузка снятых фонтанов…';
     capturedScans = await Promise.all(park.scans.map(async function (scan) {
@@ -1620,10 +1711,12 @@
     window.__stats.scans = capturedScans.map(function (s) { return { id: s.id, at: s.at, points: s.gpu.n }; });
 
     statusEl.textContent = 'Загрузка коляски…';
-    var spz = await fetch(new URLSearchParams(location.search).get('src') || 'karasunsky.spz');
-    if (!spz.ok) throw new Error('karasunsky.spz ' + spz.status);
-    var cloud = SPZ.parse(await SPZ.gunzip(await spz.arrayBuffer()));
-    var s = extractStroller(cloud);
+    var customSource=new URLSearchParams(location.search).get('src'), s;
+    if(customSource) {
+      var spz=await fetch(customSource);
+      if(!spz.ok) throw new Error('Stroller '+spz.status);
+      s=extractStroller(SPZ.parse(await SPZ.gunzip(await spz.arrayBuffer())));
+    } else s=await loadPackedCloud(res[4].stroller);
     stroller = { gpu: cloudVAO(s.pos, s.col, s.size), length: s.length, width: s.width };
     window.__stats.stroller = { points: s.size.length, length: +s.length.toFixed(2), width: +s.width.toFixed(2) };
 
@@ -1637,7 +1730,7 @@
     canvas.style.opacity = '1';
     showMenu();
     if (new URLSearchParams(location.search).get('tour') === 'fountains') visitScans();
-    if (benchmark) startGame('free');
+    if (benchmark || streamTest) startGame('free');
     requestAnimationFrame(frame);
   }
   boot().catch(function (err) { statusEl.textContent = 'Ошибка: ' + err.message; console.error(err); });
