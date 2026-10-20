@@ -191,3 +191,14 @@ WebGL и загрузки в этом прогоне не было. Это ра�
 В частности, модель горок опирается на фотографию MikSed (CC BY 4.0, 2021),
 но точный ход трассы не восстановлен. Общий набор моделей занимает около
 2,2 МБ атрибутов; это размер геометрии, не полный расход памяти браузера.
+
+### Trees and paving
+
+Trees retain their mapped trunk positions and collision footprints, with clustered crowns,
+branch forks, light bark variants and directional foliage shading. Existing sector streaming
+and distance-based point density also apply to the new vegetation.
+
+Paths and plazas use separate procedural paving patterns, asphalt uses fine aggregate,
+and surface-map borders receive a painted curb and soil transition. These borders are
+visual shading, not raised collision geometry. Fine detail fades at subpixel scale to
+reduce motion shimmer. No external textures are downloaded.
