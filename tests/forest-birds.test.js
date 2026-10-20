@@ -17,7 +17,7 @@ test('woodpeckers forage, fly low undulating routes and call repeatedly only in 
  const p=Forest.create(trees,ground,random());
  const flown=new Set(),grounded=new Set();let calls=0,hasDip=false,previous=new Map();
  for(let i=0;i<5000;i++) {
-  Forest.update(p,.05,d=>{assert.ok(d.flight);assert.ok(d.species==='woodpecker'||d.species==='crow');calls++;});
+  Forest.update(p,.05,d=>{assert.ok(d.flight);assert.ok(d.species==='woodpecker'||d.species==='spottedWoodpecker'||d.species==='crow');calls++;});
   for(const d of p.birds) {
    assert.ok(ground(d.x,d.z));assert.ok([d.x,d.y,d.z,d.pitch].every(Number.isFinite));
    assert.ok(d.y>=0&&d.y<(d.species==='woodpecker'?1.8:2.5));
@@ -80,4 +80,20 @@ test('rook, crow and woodpecker quotas cover the full forest extent',()=>{
    for(const x of [0,1])for(const z of [0,1])assert.ok(birds.some(b=>Math.floor(b.x/550)===x&&Math.floor(b.z/700)===z));
   }
  }
+});
+
+test('both woodpeckers occupy solitary territories away from rook flocks, spotted ones five times as many',()=>{
+ const dense=Array.from({length:900},(_,i)=>[20+(i%30)*30,20+Math.floor(i/30)*30]);
+ const p=Forest.create(dense,(x,z)=>x>0&&z>0&&x<1000&&z<1000,random(),[20,20],()=>true);
+ assert.equal(p.woodpeckers.length,12);assert.equal(p.spottedWoodpeckers.length,p.woodpeckers.length*5);
+ for(const d of p.woodpeckers.concat(p.spottedWoodpeckers)){
+  assert.equal(d.group,-1);
+  assert.ok(p.groups.every(g=>Math.hypot(d.x-g.x,d.z-g.z)>=18));
+  for(const other of p.woodpeckers.concat(p.spottedWoodpeckers))if(d!==other)assert.ok(Math.hypot(d.x-other.x,d.z-other.z)>=18);
+ }
+ const colors=new Set();for(const wing of [false,true])Forest.shape('spottedWoodpecker',(x,y,z,c,size)=>{assert.ok([x,y,z,...c,size].every(Number.isFinite));colors.add(c.join(','));},wing);
+ for(const c of ['26,29,30','232,229,212','190,39,36'])assert.ok(colors.has(c));
+ assert.ok(!colors.has('104,133,49'));
+ const d=p.spottedWoodpeckers[0];p.birds.forEach(b=>b.wait=1000);
+ Forest.update(p,.05,()=>{}, {x:d.x+2,z:d.z,v:0});assert.ok(d.flight&&d.y>0&&d.y<1.8);
 });

@@ -5,7 +5,7 @@ function random() {let seed=941;return()=>{seed=(Math.imul(seed,1664525)+1013904
 
 test('gulls circle and alternate water dips with low passes, then climb back',()=>{
   const p=Gulls.create([{x:10,z:20}],random());
-  assert.equal(p.birds.length,6);
+  assert.equal(p.birds.length,24);
   const d=p.birds[0];d.wait=0;
   let calls=0, dips=0, passes=0, climbed=false;
   for(let i=0;i<4000;i++) {

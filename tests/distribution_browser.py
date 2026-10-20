@@ -20,12 +20,12 @@ with sync_playwright() as p:
       const cat=(x,z)=>{const j=Math.floor((x-park.x0)/park.mpp),i=Math.floor((z-park.z0)/park.mpp);
         return i<0||j<0||i>=park.h||j>=park.w?4:pixels[(i*park.w+j)*4]&31;};
       const m=__mallards(),f=__forestBirds();
-      const populations={mallard:m.ducks,coot:m.coots,shelduck:m.shelducks,
-        gull:__gulls().birds,pigeon:__pigeons().birds,rook:f.groups,crow:f.crows,woodpecker:f.woodpeckers};
+      const populations={mallard:m.ducks,coot:m.coots,shelduck:m.shelducks,grebe:m.grebes,
+        gull:__gulls().birds,pigeon:__pigeons().birds,rook:f.groups,crow:f.crows,woodpecker:f.woodpeckers,spottedWoodpecker:f.spottedWoodpeckers};
       const result={};
       for(const [kind,birds] of Object.entries(populations)) {
         const xs=birds.map(d=>d.x),zs=birds.map(d=>d.z);
-        const water=['mallard','coot','shelduck','gull'].includes(kind);
+        const water=['mallard','coot','shelduck','grebe','gull'].includes(kind);
         const valid=birds.every(d=>water?cat(d.x,d.z)===4:kind==='pigeon'?[2,11].includes(cat(d.x,d.z)):f.canForage(d.x,d.z));
         result[kind]={count:birds.length,spanX:Math.max(...xs)-Math.min(...xs),spanZ:Math.max(...zs)-Math.min(...zs),valid,
           distant:birds.filter(d=>Math.hypot(d.x-park.start[0],d.z-park.start[1])>650).length};
@@ -37,6 +37,8 @@ with sync_playwright() as p:
         if kind != "shelduck":
             assert data["spanX"] > 600 and data["spanZ"] > 850, (kind, data)
     assert result["shelduck"]["count"] == 3
+    assert result["grebe"]["count"] == 20
+    assert result["spottedWoodpecker"]["count"] == 60
     assert not errors, errors
-    print("PASS: all eight species occupy their habitats across the actual map", result)
+    print("PASS: all ten large bird species occupy their habitats across the actual map", result)
     browser.close()

@@ -895,7 +895,7 @@
 
   function buildMallards() {
     mallards = Mallards.create(park, catAt, rng(83));
-    duckGPU = [{male: false}, {male: true}, {kind: 'coot'}, {kind: 'shelduck', male: true}, {kind: 'shelduck', male: false}].map(function (bird) {
+    duckGPU = [{male: false}, {male: true}, {kind: 'coot'}, {kind: 'shelduck', male: true}, {kind: 'shelduck', male: false}, {kind: 'grebe'}].map(function (bird) {
       var cl = new Cloud();
       Mallards.shape(bird.male, function (x, y, z, c, s, em) { cl.add(x, y, z, c, s, em); }, bird.kind);
       return cl.upload();
@@ -932,7 +932,7 @@
       var raw = catRaw(x, z), surface = raw & 31;
       return !!(raw & IN_PARK) && !(raw & UNREACHABLE) && !SOLID[surface] && !nearTrunk(x, z, 0.5) && !blockedAt(x, z, 0);
     });
-    ['rook', 'woodpecker', 'crow'].forEach(function (kind) {
+    ['rook', 'woodpecker', 'crow', 'spottedWoodpecker'].forEach(function (kind) {
       var body = new Cloud(), wing = new Cloud();
       ForestBirds.shape(kind, function (x, y, z, c, size, em) { body.add(x, y, z, c, size, em); }, false);
       ForestBirds.shape(kind, function (x, y, z, c, size, em) { wing.add(x, y, z, c, size, em); }, true);
@@ -1324,7 +1324,7 @@
     var distance = Math.hypot(d.x - car.x, d.z - car.z, d.y);
     if (distance > 40) return;
     if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
-    var wood = d.species === 'woodpecker', count = wood ? 7 : 3, spacing = wood ? 0.13 : 0.23;
+    var wood = (d.species === 'woodpecker' || d.species === 'spottedWoodpecker'), count = wood ? 7 : 3, spacing = wood ? 0.13 : 0.23;
     var duration = wood ? 0.1 : 0.18, volume = (wood ? 0.23 : 0.14) * Math.pow(1 - distance / 40, 2);
     var pan = actx.createStereoPanner();
     pan.pan.value = Math.sin(Math.atan2(d.x - car.x, -(d.z - car.z)) - cam.yaw - cam.orbit); pan.connect(duckGain);
@@ -1564,7 +1564,7 @@
 
     mallards.birds.forEach(function (d) {
       if (d.dead || doomMode || Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
-      drawCloud(duckGPU[d.species === 'shelduck' ? (d.male ? 3 : 4) : d.species === 'coot' ? 2 : d.male ? 1 : 0], yawMat(d.heading, d.x, 0.012 * Math.sin(duckTime * 2 + d.phase), d.z), 12);
+      drawCloud(duckGPU[d.species === 'shelduck' ? (d.male ? 3 : 4) : d.species === 'coot' ? 2 : d.species === 'grebe' ? 5 : d.male ? 1 : 0], yawMat(d.heading, d.x, 0.012 * Math.sin(duckTime * 2 + d.phase), d.z), 12);
     });
     pigeons.birds.forEach(function (d) {
       if (d.dead || doomMode || Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
@@ -1580,13 +1580,13 @@
     });
     forestBirds.birds.forEach(function (d) {
       if (d.dead || doomMode || Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
-      var kind = d.species === 'woodpecker' ? 1 : d.species === 'crow' ? 2 : 0;
+      var kind = d.species === 'woodpecker' ? 1 : d.species === 'crow' ? 2 : d.species === 'spottedWoodpecker' ? 3 : 0;
       var pitch = d.flight ? d.pitch : !d.walk ? -0.85 * Math.pow(Math.max(0, Math.sin(d.phase)), 4) : 0;
       var c = Math.cos(pitch), s = Math.sin(pitch);
       var base = mat4mul(yawMat(d.heading, d.x, d.y + 0.025, d.z), [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
       drawCloud(forestGPU[kind], base, 12);
       if (d.flight) {
-        var angle = Math.sin(d.phase * (kind === 1 ? 1 : 1.3)) * 0.9, wc = Math.cos(angle), ws = Math.sin(angle);
+        var angle = Math.sin(d.phase * (kind === 1 || kind === 3 ? 1 : 1.3)) * 0.9, wc = Math.cos(angle), ws = Math.sin(angle);
         [-1, 1].forEach(function (side) {
           var wing = [side * wc, ws, 0, 0, -side * ws, wc, 0, 0, 0, 0, 1, 0, side * 0.06, 0.22, 0, 1];
           drawCloud(forestWingGPU[kind], mat4mul(base, wing), 12);
@@ -1642,11 +1642,11 @@
     function drawDoomBird(d) {
       if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
       var bird = d.source, gpu;
-      if (d.kind === 'waterbird') gpu = duckGPU[bird.species === 'shelduck' ? (bird.male ? 3 : 4) : bird.species === 'coot' ? 2 : bird.male ? 1 : 0];
+      if (d.kind === 'waterbird') gpu = duckGPU[bird.species === 'shelduck' ? (bird.male ? 3 : 4) : bird.species === 'coot' ? 2 : bird.species === 'grebe' ? 5 : bird.male ? 1 : 0];
       else if (d.kind === 'pigeon') gpu = pigeonGPU;
       else if (d.kind === 'gull') gpu = gullGPU;
       else if (d.kind === 'small') gpu = smallGPU[bird.species].body;
-      else gpu = forestGPU[bird.species === 'woodpecker' ? 1 : bird.species === 'crow' ? 2 : 0];
+      else gpu = forestGPU[bird.species === 'woodpecker' ? 1 : bird.species === 'crow' ? 2 : d.species === 'spottedWoodpecker' ? 3 : 0];
       var y = d.dead ? 0.025 : (d.kind === 'gull' ? 0.13 : 0.01) + Math.abs(Math.sin(d.phase)) * 0.035;
       var base = yawMat(d.heading, d.x, y, d.z);
       if (d.dead) base = mat4mul(base, [1.2, 0, 0, 0, 0, 0.16, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
