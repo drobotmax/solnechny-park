@@ -21,7 +21,7 @@ with sync_playwright() as p:
         return i<0||j<0||i>=park.h||j>=park.w?4:pixels[(i*park.w+j)*4]&31;};
       const m=__mallards(),f=__forestBirds();
       const populations={mallard:m.ducks,coot:m.coots,shelduck:m.shelducks,grebe:m.grebes,
-        gull:__gulls().birds,pigeon:__pigeons().birds,rook:f.groups,crow:f.crows,woodpecker:f.woodpeckers,spottedWoodpecker:f.spottedWoodpeckers};
+        gull:__gulls().birds,pigeon:__pigeons().birds,rook:f.groups,crow:f.crows,woodpecker:f.woodpeckers,spottedWoodpecker:f.spottedWoodpeckers,jay:f.jays};
       const result={};
       for(const [kind,birds] of Object.entries(populations)) {
         const xs=birds.map(d=>d.x),zs=birds.map(d=>d.z);
@@ -40,5 +40,5 @@ with sync_playwright() as p:
     assert result["grebe"]["count"] == 20
     assert result["spottedWoodpecker"]["count"] == 60
     assert not errors, errors
-    print("PASS: all ten large bird species occupy their habitats across the actual map", result)
+    print("PASS: all eleven large bird species occupy their habitats across the actual map", result)
     browser.close()

@@ -887,7 +887,7 @@
   var capturedScans = [];
   var gulls = { birds: [] }, gullGPU = null, gullWingGPU = null, nextGullCry = 0;
   var smallWildlife = { birds: [], squirrels: [] }, smallGPU = {};
-  var nextBark = 3, nextPant = 0;
+  var nextBark = 3, nextPant = 0, nextJayRattle = 0, nextJayMeow = 20;
   var forestBirds = { birds: [], groups: [], woodpeckers: [] }, forestGPU = [], forestWingGPU = [], nextCaw = 4;
   var dogs = { dogs: [] }, dogGPU = [], dogLegGPU = [];
   var pigeons = { groups: [], birds: [] }, pigeonGPU = null, wingGPU = null, nextCoo = 2;
@@ -932,7 +932,7 @@
       var raw = catRaw(x, z), surface = raw & 31;
       return !!(raw & IN_PARK) && !(raw & UNREACHABLE) && !SOLID[surface] && !nearTrunk(x, z, 0.5) && !blockedAt(x, z, 0);
     });
-    ['rook', 'woodpecker', 'crow', 'spottedWoodpecker'].forEach(function (kind) {
+    ['rook', 'woodpecker', 'crow', 'spottedWoodpecker', 'jay'].forEach(function (kind) {
       var body = new Cloud(), wing = new Cloud();
       ForestBirds.shape(kind, function (x, y, z, c, size, em) { body.add(x, y, z, c, size, em); }, false);
       ForestBirds.shape(kind, function (x, y, z, c, size, em) { wing.add(x, y, z, c, size, em); }, true);
@@ -970,6 +970,44 @@
       osc.start(at); osc.stop(at + duration);
       osc.onended = function () { osc.disconnect(); gain.disconnect(); pan.disconnect(); };
     });
+  }
+  function jaySoundTick(dt) {
+    if (!actx || actx.state !== 'running' || !state.sound || document.hidden) return;
+    var nearby = forestBirds.jays.filter(function (d) { return !d.dead && Math.hypot(d.x - car.x, d.z - car.z) < 32; });
+    nearby.sort(function (a, b) { return Math.hypot(a.x - car.x, a.z - car.z) - Math.hypot(b.x - car.x, b.z - car.z); });
+    if (!nearby.length) { nextJayMeow = 20; nextJayRattle = 0; return; }
+    if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
+    nextJayRattle -= dt; nextJayMeow -= dt;
+    var d = nearby[0], now = actx.currentTime;
+    var volume = Math.pow(1 - Math.hypot(d.x - car.x, d.z - car.z) / 32, 2);
+    function connectVoice(source, filter, gain, duration) {
+      var pan = actx.createStereoPanner();
+      pan.pan.value = Math.max(-1, Math.min(1, ((d.x - car.x) * Math.cos(car.heading) + (d.z - car.z) * Math.sin(car.heading)) / 18));
+      source.connect(filter); filter.connect(gain); gain.connect(pan); pan.connect(duckGain);
+      source.start(now); source.stop(now + duration);
+      source.onended = function () { source.disconnect(); filter.disconnect(); gain.disconnect(); pan.disconnect(); };
+    }
+    if (nextJayRattle <= 0) {
+      nextJayRattle = 0.12;
+      var source = actx.createBufferSource(), buffer = actx.createBuffer(1, Math.ceil(11025 * 0.15), 11025), samples = buffer.getChannelData(0);
+      for (var i = 0; i < samples.length; i++) samples[i] = Math.round((Math.random() * 2 - 1) * 7) / 7 * (0.25 + 0.75 * Math.pow(Math.sin(i / 11025 * Math.PI * 65), 2));
+      source.buffer = buffer;
+      var filter = actx.createBiquadFilter(), gain = actx.createGain();
+      filter.type = 'bandpass'; filter.frequency.value = 1900; filter.Q.value = 1.1;
+      gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(volume * 0.045, now + 0.008);
+      gain.gain.setValueAtTime(volume * 0.045, now + 0.12); gain.gain.linearRampToValueAtTime(0, now + 0.15);
+      connectVoice(source, filter, gain, 0.15);
+    }
+    if (nextJayMeow <= 0) {
+      nextJayMeow = 20;
+      var source = actx.createOscillator(), filter = actx.createBiquadFilter(), gain = actx.createGain();
+      source.type = 'sawtooth'; source.frequency.setValueAtTime(660, now);
+      source.frequency.exponentialRampToValueAtTime(1050, now + 0.18); source.frequency.exponentialRampToValueAtTime(420, now + 0.65);
+      filter.type = 'bandpass'; filter.frequency.value = 1400; filter.Q.value = 2.5;
+      gain.gain.setValueAtTime(0.0001, now); gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume * 0.11), now + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.65);
+      connectVoice(source, filter, gain, 0.65);
+    }
   }
   function forestTick(dt) {
     ForestBirds.update(forestBirds, dt, forestCall, car, dogs.dogs);
@@ -1319,6 +1357,7 @@
     return true;
   }
   function forestCall(d) {
+    if (d.species === 'jay') return;
     if (d.dead) return;
     if (!actx || actx.state !== 'running' || !state.sound || document.hidden) return;
     var distance = Math.hypot(d.x - car.x, d.z - car.z, d.y);
@@ -1580,7 +1619,7 @@
     });
     forestBirds.birds.forEach(function (d) {
       if (d.dead || doomMode || Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
-      var kind = d.species === 'woodpecker' ? 1 : d.species === 'crow' ? 2 : d.species === 'spottedWoodpecker' ? 3 : 0;
+      var kind = d.species === 'woodpecker' ? 1 : d.species === 'crow' ? 2 : d.species === 'spottedWoodpecker' ? 3 : d.species === 'jay' ? 4 : 0;
       var pitch = d.flight ? d.pitch : !d.walk ? -0.85 * Math.pow(Math.max(0, Math.sin(d.phase)), 4) : 0;
       var c = Math.cos(pitch), s = Math.sin(pitch);
       var base = mat4mul(yawMat(d.heading, d.x, d.y + 0.025, d.z), [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
@@ -1646,7 +1685,7 @@
       else if (d.kind === 'pigeon') gpu = pigeonGPU;
       else if (d.kind === 'gull') gpu = gullGPU;
       else if (d.kind === 'small') gpu = smallGPU[bird.species].body;
-      else gpu = forestGPU[bird.species === 'woodpecker' ? 1 : bird.species === 'crow' ? 2 : d.species === 'spottedWoodpecker' ? 3 : 0];
+      else gpu = forestGPU[bird.species === 'woodpecker' ? 1 : bird.species === 'crow' ? 2 : d.species === 'spottedWoodpecker' ? 3 : d.species === 'jay' ? 4 : 0];
       var y = d.dead ? 0.025 : (d.kind === 'gull' ? 0.13 : 0.01) + Math.abs(Math.sin(d.phase)) * 0.035;
       var base = yawMat(d.heading, d.x, y, d.z);
       if (d.dead) base = mat4mul(base, [1.2, 0, 0, 0, 0, 0.16, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
@@ -1773,7 +1812,7 @@
       Dogs.update(dogs, dt, car);
       dogSoundTick(dt);
       SmallWildlife.update(smallWildlife, dt, car, dogs.dogs, smallBirdCall, !doomMode);
-      if (!doomMode) forestTick(dt);
+      if (!doomMode) { forestTick(dt); jaySoundTick(dt); }
       nextGullCry -= dt;
       if (!doomMode) Gulls.update(gulls, dt, function (d) {
         if (nextGullCry <= 0 && Math.hypot(d.x - car.x, d.z - car.z) < 48) {

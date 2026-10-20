@@ -3,7 +3,7 @@
   'use strict';
   var habitats = typeof module !== 'undefined' && module.exports ? require('./habitat-sites.js') : root.HabitatSites;
   function shape(kind, add, wing) {
-    var spotted = kind === 'spottedWoodpecker', woodpecker = kind === 'woodpecker' || spotted, crow = kind === 'crow';
+    var spotted = kind === 'spottedWoodpecker', woodpecker = kind === 'woodpecker' || spotted, crow = kind === 'crow', jay = kind === 'jay';
     function oval(cx, cy, cz, rx, ry, rz, color) {
       for (var j = 0; j <= 10; j++) for (var i = 0; i < 24; i++) {
         var v = Math.PI * j / 10, a = Math.PI * 2 * i / 24;
@@ -15,10 +15,27 @@
       for (var x = 0; x < (woodpecker ? 0.24 : 0.35); x += 0.015) {
         var width = 0.1 * (1 - x / (woodpecker ? 0.3 : 0.42));
         for (var z = -width; z < width; z += 0.015) {
-          var color = spotted ? (Math.floor(x / 0.035) % 2 ? [228, 225, 209] : [29, 31, 32]) : woodpecker ? [72, 104, 47] : [30, 32, 43];
+          var color = jay ? (x > 0.12 && x < 0.24 ? (Math.floor(x / 0.025) % 2 ? [51, 139, 208] : [28, 33, 37]) : [102, 98, 90]) : spotted ? (Math.floor(x / 0.035) % 2 ? [228, 225, 209] : [29, 31, 32]) : woodpecker ? [72, 104, 47] : [30, 32, 43];
           add(x, 0, z + x * 0.22, color, 0.022, false);
         }
       }
+      return;
+    }
+    if (jay) {
+      oval(0, 0.18, 0.02, 0.08, 0.11, 0.19, [173, 137, 110]);
+      oval(0, 0.30, -0.10, 0.055, 0.08, 0.065, [198, 177, 148]);
+      oval(0, 0.38, -0.13, 0.052, 0.055, 0.06, [207, 196, 174]);
+      oval(0, 0.35, -0.23, 0.019, 0.016, 0.060, [35, 37, 34]);
+      oval(0, 0.14, 0.20, 0.055, 0.045, 0.07, [232, 230, 214]);
+      oval(0, 0.11, 0.29, 0.045, 0.02, 0.12, [34, 38, 38]);
+      [-1, 1].forEach(function (side) {
+        oval(side * 0.05, 0.335, -0.16, 0.012, 0.035, 0.028, [29, 33, 33]);
+        oval(side * 0.049, 0.39, -0.155, 0.008, 0.008, 0.008, [25, 29, 31]);
+        oval(side * 0.075, 0.20, 0.04, 0.022, 0.065, 0.13, [105, 96, 85]);
+        oval(side * 0.09, 0.23, 0.02, 0.012, 0.033, 0.065, [51, 139, 208]);
+        for (var z = -0.02; z < 0.08; z += 0.025) oval(side * 0.102, 0.23, z, 0.006, 0.034, 0.006, [27, 32, 34]);
+        oval(side * 0.035, 0.035, 0.025, 0.009, 0.035, 0.013, [80, 72, 63]);
+      });
       return;
     }
     oval(0, 0.18, 0.02, 0.085, 0.12, woodpecker ? 0.16 : 0.21, spotted ? [26, 29, 30] : woodpecker ? [104, 133, 49] : crow ? [128, 132, 134] : [29, 29, 38]);
@@ -51,7 +68,7 @@
     return true;
   }
   function create(trees, canForage, random, start, denseForest, canFly) {
-    var groups = [], birds = [], woodpeckers = [], spottedWoodpeckers = [], crows = [];
+    var groups = [], birds = [], woodpeckers = [], spottedWoodpeckers = [], jays = [], crows = [];
     canFly = canFly || canForage;
     var sites = trees.filter(function (t, i) { return i % 3 === 0 && canForage(t[0] + 3, t[1] + 2) && (!denseForest || denseForest(t[0] + 3, t[1] + 2)); })
       .map(function (t) { return { x: t[0] + 3, z: t[1] + 2 }; });
@@ -89,20 +106,21 @@
     sites.forEach(function (site) { [[0,0],[18,13],[-18,13],[18,-13],[-18,-13]].forEach(function (offset) { territories.push({ x: site.x + offset[0], z: site.z + offset[1] }); }); });
     territories = territories.filter(function (site) { return canForage(site.x, site.z) && (!denseForest || denseForest(site.x, site.z)) && groups.every(function (g) { return Math.hypot(g.x - site.x, g.z - site.z) >= 18; }); });
     territories = habitats.order(territories, start || [0, 0]);
-    function placeWoodpeckers(list, count, kind, spacing) {
-      var available = territories.filter(function (site) { return woodpeckers.concat(spottedWoodpeckers).every(function (d) { return Math.hypot(d.x - site.x, d.z - site.z) >= (d.species === kind ? spacing : 18); }); });
+    function placeSolitaryBirds(list, count, kind, spacing) {
+      var available = territories.filter(function (site) { return woodpeckers.concat(spottedWoodpeckers, jays).every(function (d) { return Math.hypot(d.x - site.x, d.z - site.z) >= (d.species === kind ? spacing : 18); }); });
       habitats.order(available, start || [0, 0]).forEach(function (site) {
         if (list.length >= count || groups.some(function (g) { return Math.hypot(g.x - site.x, g.z - site.z) < 18; })) return;
-        if (woodpeckers.concat(spottedWoodpeckers).some(function (d) { return Math.hypot(d.x - site.x, d.z - site.z) < (d.species === kind ? spacing : 18); })) return;
+        if (woodpeckers.concat(spottedWoodpeckers, jays).some(function (d) { return Math.hypot(d.x - site.x, d.z - site.z) < (d.species === kind ? spacing : 18); })) return;
         if (![0,1,2,3,4,5,6,7,8,9,10,11].some(function (i) { var a = i * Math.PI / 6; return canForage(site.x + Math.cos(a) * 8, site.z + Math.sin(a) * 8) && route(canFly, site.x, site.z, site.x + Math.cos(a) * 8, site.z + Math.sin(a) * 8); })) return;
         var d = { species: kind, x: site.x, z: site.z, y: 0, anchorX: site.x, anchorZ: site.z, group: -1,
           heading: random() * Math.PI * 2, phase: random() * Math.PI * 2, pitch: 0, flight: null, walk: null, wait: 4 + random() * 12, call: 0 };
         list.push(d); birds.push(d);
       });
     }
-    placeWoodpeckers(woodpeckers, 12, 'woodpecker', 80);
-    placeWoodpeckers(spottedWoodpeckers, woodpeckers.length * 5, 'spottedWoodpecker', 30);
-    return { groups: groups, birds: birds, woodpeckers: woodpeckers, spottedWoodpeckers: spottedWoodpeckers, crows: crows, canForage: canForage, canFly: canFly, random: random };
+    placeSolitaryBirds(woodpeckers, 12, 'woodpecker', 80);
+    placeSolitaryBirds(spottedWoodpeckers, woodpeckers.length * 5, 'spottedWoodpecker', 30);
+    placeSolitaryBirds(jays, 30, 'jay', 35);
+    return { groups: groups, birds: birds, woodpeckers: woodpeckers, spottedWoodpeckers: spottedWoodpeckers, jays: jays, crows: crows, canForage: canForage, canFly: canFly, random: random };
   }
   function update(pop, dt, onCall, car, dogs) {
     var threats = car ? [car].concat(dogs || []) : [];
@@ -122,7 +140,7 @@
       var source = threats.find(function (s) { return g.birds.some(function (d) { return !d.dead && !d.flight && Math.hypot(d.x - s.x, d.z - s.z) < 8; }); });
       if (source) g.birds.concat(pop.crows.filter(function (d) { return d.group === index; })).forEach(function (d) { if (!d.dead && !d.flight) flee(d, source); });
     });
-    pop.woodpeckers.concat(pop.spottedWoodpeckers, pop.crows).forEach(function (d) {
+    pop.woodpeckers.concat(pop.spottedWoodpeckers, pop.jays, pop.crows).forEach(function (d) {
       var source = threats.find(function (s) { return !d.dead && !d.flight && Math.hypot(d.x - s.x, d.z - s.z) < 8; });
       if (source) flee(d, source);
     });
@@ -141,7 +159,7 @@
         if (!wood) d.heading = Math.atan2((f.tx - f.x) - (f.tz - f.z) / length * (f.curve || 0) * Math.PI * Math.cos(Math.PI * f.t), -((f.tz - f.z) + (f.tx - f.x) / length * (f.curve || 0) * Math.PI * Math.cos(Math.PI * f.t)));
         d.pitch = dt ? Math.atan2((d.y - previous) / dt, 5) : 0;
         d.call -= dt;
-        if (d.call <= 0 && onCall) { if (wood || d.species === 'crow' || pop.groups[d.group].birds.find(function (b) { return !b.dead; }) === d) onCall(d); d.call = wood ? 1.25 : 1.8; }
+        if (d.call <= 0 && onCall) { if (wood || d.species === 'crow' || d.species === 'jay' || pop.groups[d.group].birds.find(function (b) { return !b.dead; }) === d) onCall(d); d.call = wood ? 1.25 : 1.8; }
         if (f.t >= 1) { if (f.scared) { d.anchorX = d.x; d.anchorZ = d.z; } d.flight = null; d.y = 0; d.pitch = 0; d.wait = 10 + pop.random() * 16; }
         return;
       }
