@@ -81,11 +81,11 @@
     var threats = [car].concat(dogs || []);
     population.groups.forEach(function (group) {
       var threat = threats.find(function (source) {
-        return group.birds.some(function (d) { return !d.flight && Math.hypot(d.x - source.x, d.z - source.z) < 4.5 + Math.abs(source.v) * 0.35; });
+        return group.birds.some(function (d) { return !d.dead && !d.flight && Math.hypot(d.x - source.x, d.z - source.z) < 4.5 + Math.abs(source.v) * 0.35; });
       });
       if (threat) {
         group.birds.forEach(function (d, i) {
-          if (d.flight) return;
+          if (d.dead || d.flight) return;
           d.walk = null; d.pause = 2;
           var dx = d.homeX - threat.x, dz = d.homeZ - threat.z, distance = Math.hypot(dx, dz);
           if (distance < 0.1) { dx = Math.sin(d.heading); dz = -Math.cos(d.heading); distance = 1; }
@@ -96,6 +96,7 @@
       }
     });
     population.birds.forEach(function (d) {
+      if (d.dead) return;
       var f = d.flight;
       if (!f) {
         d.pause -= dt;
@@ -112,7 +113,7 @@
         }
         var wx = d.walk.x - d.x, wz = d.walk.z - d.z, distance = Math.hypot(wx, wz);
         var step = Math.min(distance, dt * 0.22), nx = d.x + wx / Math.max(distance, 0.001) * step, nz = d.z + wz / Math.max(distance, 0.001) * step;
-        if (!population.canLand(nx, nz) || population.groups[d.flock].birds.some(function (other) { return other !== d && !other.flight && Math.hypot(other.x - nx, other.z - nz) < 0.35; })) {
+        if (!population.canLand(nx, nz) || population.groups[d.flock].birds.some(function (other) { return other !== d && !other.dead && !other.flight && Math.hypot(other.x - nx, other.z - nz) < 0.35; })) {
           d.walk = null; d.pause = 0.5 + population.random(); return;
         }
         d.x = d.homeX = nx; d.z = d.homeZ = nz;

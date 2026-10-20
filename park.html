@@ -72,6 +72,10 @@
     #compass { top: auto; bottom: 150px; }
     #place { bottom: 150px; display: none; }
   }
+  #doomScore { padding-top:6px; color:#ffb29c; font-size:14px; }
+  #modeToast { position: fixed; top: 28%; left: 50%; transform: translateX(-50%); font-size: 30px; color: #ff4430; text-shadow: 2px 2px #000; opacity: 0; pointer-events: none; }
+  #modeToast.show { opacity: 1; }
+  body.doom .box { border-color: #813324; background-color: rgba(28, 3, 2, .85); color: #e7b1a2; }
 </style>
 </head>
 <body>
@@ -84,10 +88,12 @@
     <div class="bar" id="milkBar"><i></i></div>
   </div>
   <div class="bar" id="stamBar" title="турбо"><i></i></div>
+  <div id="doomScore" hidden>DOOM · Задавлено: <b id="doomKills">0</b></div>
   <div class="help dim" style="margin-top:6px">WASD / стрелки - ехать · Shift - турбо<br>V - вид сверху · колесо - зум · тянуть - осмотреться</div>
 </div>
 <div id="compass" class="box"><span id="arrow">↑</span><span>бутылочка <span id="bdist">-</span> м</span></div>
 <div id="place"></div>
+<div id="modeToast" aria-live="polite"></div>
 <div id="pop">+60 с</div>
 <canvas id="mini" class="box"></canvas>
 <div id="panel" class="box">
@@ -131,11 +137,13 @@
   <div class="btns"><button class="main" id="play">Играть</button><button id="free">Просто кататься</button></div>
 </div></div>
 <script src="spz.js"></script>
-<script src="mallards.js?v=20261020-small-speculum"></script>
-<script src="pigeons.js?v=20261020-circling-return"></script>
-<script src="forest-birds.js?v=20261020-forest"></script>
-<script src="gulls.js?v=20261020-72-gulls"></script>
+<script src="habitat-sites.js?v=20261020-map-wide"></script>
+<script src="mallards.js?v=20261020-map-wide"></script>
+<script src="pigeons.js?v=20261020-map-wide"></script>
+<script src="doom-birds.js?v=20261020-map-wide"></script>
+<script src="forest-birds.js?v=20261020-map-wide"></script>
+<script src="gulls.js?v=20261020-map-wide"></script>
 <script src="dogs.js?v=20261019-small-dogs"></script>
-<script src="park.js?v=20261020-forest-dogs-circling"></script>
+<script src="park.js?v=20261020-map-wide"></script>
 </body>
 </html>

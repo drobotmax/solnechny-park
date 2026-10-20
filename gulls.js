@@ -42,6 +42,7 @@
   }
   function update(pop, dt, onDive) {
     pop.birds.forEach(function (d) {
+      if (d.dead) return;
       d.wait -= dt;
       if (d.dive === null && d.wait <= 0) {
         d.dive = 0; d.plunge = !d.plunge;

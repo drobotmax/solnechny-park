@@ -7,7 +7,7 @@ const catAt = (x, z) => x >= 12 && x < 235 && z >= 0 && z < 250 ? 4 : 2;
 test('mallard and larger neighbouring coot flocks stay on water for a full orbit', () => {
   const { ducks, coots, birds, groups } = Mallards.create(park, catAt, () => 0.4);
   assert.ok(groups.length > 0);
-  assert.ok(groups.length <= 12);
+
   assert.equal(ducks.length, groups.length * 12);
   assert.equal(coots.length, groups.length * 24);
   for (const group of groups) {
@@ -86,5 +86,18 @@ test('shelducks have orange plumage, pale heads and dark bills', () => {
     assert.ok(colors.has(male ? '235,202,145' : '246,225,184'));
     assert.ok(colors.has('34,34,32'));
     assert.ok(!colors.has('22,111,66'));
+  }
+});
+
+test('distant separate waterbodies receive flocks regardless of the starting shore', () => {
+  const p = {...park, w: 1000, h: 1000};
+  const water = (x, z) => x > 12 && x < 988 && ((z > 20 && z < 200) || (z > 800 && z < 980)) ? 4 : 1;
+  for (const start of [[10, 10], [990, 990]]) {
+    const m = Mallards.create({...p, start}, water, () => 0.4);
+    assert.ok(m.groups.length > 12);
+    for (const x of [0, 1]) for (const z of [0, 1]) {
+      assert.ok(m.groups.some(g => Math.floor(g.x / 500) === x && Math.floor(g.z / 500) === z));
+    }
+    assert.equal(m.shelducks.length, 3);
   }
 });
