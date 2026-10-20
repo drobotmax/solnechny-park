@@ -45,6 +45,31 @@
   var SPREAD = { pico8: 0.18, gameboy: 0.3, cga: 0.45, mono: 0.6 };
   var DEFAULTS = { pix: 2, speedMul: 1, palette: 'source', accent: '#e4342a', dither: false, night: false, grain: true, mini: true, sound: true };
   var state = Object.assign({}, DEFAULTS, readSaved(), readQuery());
+  var doomMode = false, cheatBuffer = '', cheatAt = 0, doomHorde = null, doomCorpses = [], doomKills = 0, doomGunGPU = null, doomBarrelGPU = null, doomFlameGPU = null;
+  var doomMusic = new Audio('assets/audio/at-dooms-gate-8bit.mp3');
+  doomMusic.loop = true; doomMusic.volume = 0.32; doomMusic.preload = 'none';
+  var musicActive = false;
+  function syncDoomMusic() {
+    var active = doomMode && state.sound && !document.hidden && (game.mode === 'play' || game.mode === 'free');
+    if (active === musicActive) return;
+    musicActive = active;
+    if (active) doomMusic.play().catch(function () { musicActive = false; });
+    else doomMusic.pause();
+  }
+  function toggleDoom() {
+    if (!stroller) return;
+    doomMode = !doomMode; document.body.classList.toggle('doom', doomMode);
+    Object.keys(keys).forEach(function (k) { keys[k] = false; });
+    syncDoomMusic();
+    if (doomMode) doomHorde = DoomBirds.create([
+      { kind: 'waterbird', birds: mallards.birds }, { kind: 'pigeon', birds: pigeons.birds },
+      { kind: 'gull', birds: gulls.birds }, { kind: 'forest', birds: forestBirds.birds }
+    ], doomGround, rng(901 + doomKills), car);
+    $('doomScore').hidden = !doomMode;
+    $('modeToast').textContent = doomMode ? 'DOOM ON' : 'DOOM OFF';
+    $('modeToast').classList.add('show');
+    clearTimeout(toggleDoom.toast); toggleDoom.toast = setTimeout(function () { $('modeToast').classList.remove('show'); }, 2200);
+  }
 
   var stage = document.getElementById('stage');
   var canvas = document.getElementById('c');
@@ -143,6 +168,8 @@
     'in vec2 vXZ;\n' +
     'in float vDist;\n' +
     'uniform sampler2D uGround, uAlbedo;\n' +
+    'uniform vec4 uContact[16];\n' +
+    'uniform int uContactN;\n' +
     'uniform vec4 uFrame;\n' +            // x0, z0, width m, height m
     'uniform float uTime, uFogNear, uFogFar, uLight;\n' + COLOR +
     'out vec4 o;\n' +
@@ -176,8 +203,51 @@
     '    c = mix(vec3(0.33, 0.50, 0.22), sat, 0.6) * (0.85 + 0.3 * h);\n' +
     '    if (h2 > 0.96 && near > 0.0) c = mix(c, vec3(0.80, 0.62, 0.25), near);\n' +
     '  } else if (cat == 7) c = mix(sat, vec3(0.25, 0.58, 0.28), 0.3) * (mod(floor(vXZ.x / 4.0), 2.0) > 0.5 ? 1.0 : 0.9);\n' +
+    '  float contact=0.; for(int i=0;i<16;i++){if(i>=uContactN)break;vec2 d=(vXZ-uContact[i].xy)/uContact[i].zw; contact=max(contact,(1.-smoothstep(.65,1.3,length(d)))*.20); }\n' +
+    '  c*=1.-contact;\n' +
     '  o = vec4(colorize(c * uLight, smoothstep(uFogNear, uFogFar, vDist)), 1.0);\n' +
     '}\n';
+
+  var MESH_VS = `#version 300 es
+    layout(location=0) in vec3 aPos;
+    layout(location=1) in vec3 aNormal;
+    layout(location=2) in vec3 aColor;
+    layout(location=3) in float aMaterial;
+    uniform mat4 uView,uProj;
+    out vec3 vPos,vNormal,vColor;
+    flat out float vMaterial;
+    out float vDistance;
+    void main(){vec4 p=uView*vec4(aPos,1.);gl_Position=uProj*p;
+      vPos=aPos;vNormal=aNormal;vColor=aColor;vMaterial=aMaterial;vDistance=-p.z;}
+  `;
+  var MESH_FS = `#version 300 es
+    precision highp float;
+    in vec3 vPos,vNormal,vColor;
+    flat in float vMaterial;
+    in float vDistance;
+    uniform vec3 uEye;
+    uniform float uFogNear,uFogFar,uLight;
+  ` + COLOR + `
+    out vec4 o;
+    float noise(vec3 p){return fract(sin(dot(floor(p),vec3(17.1,89.7,43.2)))*43758.5453);}
+    void main(){
+      vec3 n=normalize(vNormal);if(!gl_FrontFacing)n=-n;
+      vec3 light=normalize(vec3(-.45,.82,-.32));
+      float shade=.58+.42*max(0.,dot(n,light));
+      vec3 c=vColor;
+      float detail=1.-smoothstep(35.,100.,vDistance);
+      if(vMaterial==1.)c*=mix(1.,.94+.12*noise(vPos*30.),detail);
+      if(vMaterial==4.)c*=mix(1.,.88+.12*step(.08,fract(vPos.x*2.+vPos.z*.25)),detail);
+      if(vMaterial==2.)shade+=.12*pow(max(0.,dot(reflect(-light,n),normalize(uEye-vPos))),20.);
+      if(vMaterial==3.){
+        float f=pow(1.-abs(dot(n,normalize(uEye-vPos))),3.);
+        c=mix(c,vec3(.61,.72,.77),.22+f*.42);
+        shade=.8+.2*max(0.,n.y);
+      }
+      c*=shade*(.78+.22*smoothstep(0.,1.2,vPos.y))*uLight;
+      o=vec4(colorize(c,smoothstep(uFogNear,uFogFar,vDistance)),1.);
+    }
+  `;
 
   function program(vs, fs, names) {
     function sh(type, src) {
@@ -197,7 +267,9 @@
     return u;
   }
   var P = program(PTS_VS, PTS_FS, ['uModel', 'uFocal', 'uMaxPt', 'uAnim', 'uInstanced', 'uDensity']);
-  var G = program(GROUND_VS, GROUND_FS, ['uGround', 'uAlbedo', 'uFrame']);
+  var G = program(GROUND_VS, GROUND_FS, ['uGround', 'uAlbedo', 'uFrame', 'uContact', 'uContactN']);
+  var M = program(MESH_VS, MESH_FS, ['uEye']);
+  var meshes=null, meshContacts=null;
 
   // Point cloud under construction: position, RGBA, world size.
   function Cloud() { this.pos = []; this.col = []; this.size = []; }
@@ -247,6 +319,15 @@
     gl.bindVertexArray(null);
     return {id: ++cloudId, vao: vaos[1], vaos: vaos, n: size.length, center: center, radius: radius, buffers: buffers, instances: gl.createBuffer()};
   }
+
+  function uploadMesh(entry) {
+    var source=ParkMeshes.build(entry),vao=gl.createVertexArray(),buffer=gl.createBuffer();
+    gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,source.data,gl.STATIC_DRAW);
+    [3,3,3,1].forEach(function(size,i){gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,gl.FLOAT,false,40,i*12);});
+    gl.bindVertexArray(null);
+    return {vao:vao,buffer:buffer,n:source.n,center:source.center,radius:source.radius};
+  }
+  function releaseMesh(mesh){gl.deleteVertexArray(mesh.vao);gl.deleteBuffer(mesh.buffer);}
 
   function releaseCloud(c) {
     Object.keys(c.vaos).forEach(function (key) {gl.deleteVertexArray(c.vaos[key]);});
@@ -407,7 +488,8 @@
     // Buildings: walls with a plinth and windows, flat roof; the planetarium
     // gets its dome.
     var WALLS = [[214, 200, 176], [190, 176, 160], [222, 216, 204], [176, 150, 120], [200, 190, 200]], ROOFS = [[120, 70, 60], [90, 90, 96], [140, 100, 80]];
-    park.buildings.forEach(function (b) {
+    park.buildings.forEach(function (b, index) {
+      if(ParkMeshes.buildingIds.indexOf(index)!==-1)return;
       var p = b.pts, h = b.h, wall = WALLS[Math.floor(r() * WALLS.length)], roof = ROOFS[Math.floor(r() * ROOFS.length)];
       if (p.length < 3) return;
       for (var i = 0; i < p.length; i++) {
@@ -436,7 +518,7 @@
       }
     });
 
-    park.rides.forEach(function (ride) { if (ride.name !== 'Круговой обзор') buildRide(cl, r, ride); });
+    park.rides.forEach(function (ride,index) { if (ride.name !== 'Круговой обзор' && ParkMeshes.rideIds.indexOf(index)===-1) buildRide(cl, r, ride); });
     park.fences.forEach(function (f) {
       polyline(f.pts, 0.3, function (x, z, s) {
         var post = (s % 2.5) < 0.3;
@@ -695,8 +777,15 @@
     forestBirds = ForestBirds.create(park.trees, function (x, z) {
       var raw = catRaw(x, z);
       return (raw & 31) === WOOD && !!(raw & IN_PARK) && !(raw & UNREACHABLE) && nearTrunk(x, z, 8) && !nearTrunk(x, z, 0.8) && !blockedAt(x, z, 0);
-    }, rng(1201));
-    ['rook', 'woodpecker'].forEach(function (kind) {
+    }, rng(1201), park.start, function (x, z) {
+      var wooded = 0;
+      [8, 16, 24].forEach(function (r) { for (var a = 0; a < 12; a++) if (catAt(x + Math.cos(a * Math.PI / 6) * r, z + Math.sin(a * Math.PI / 6) * r) === WOOD) wooded++; });
+      return wooded >= 20;
+    }, function (x, z) {
+      var raw = catRaw(x, z), surface = raw & 31;
+      return !!(raw & IN_PARK) && !(raw & UNREACHABLE) && !SOLID[surface] && !nearTrunk(x, z, 0.5) && !blockedAt(x, z, 0);
+    });
+    ['rook', 'woodpecker', 'crow'].forEach(function (kind) {
       var body = new Cloud(), wing = new Cloud();
       ForestBirds.shape(kind, function (x, y, z, c, size, em) { body.add(x, y, z, c, size, em); }, false);
       ForestBirds.shape(kind, function (x, y, z, c, size, em) { wing.add(x, y, z, c, size, em); }, true);
@@ -704,13 +793,13 @@
     });
   }
   function forestTick(dt) {
-    ForestBirds.update(forestBirds, dt, forestCall);
+    ForestBirds.update(forestBirds, dt, forestCall, car, dogs.dogs);
     if (!state.sound || !actx || actx.state !== 'running') return;
     nextCaw -= dt;
     if (nextCaw <= 0) {
-      var nearby = forestBirds.groups.filter(function (g) { return Math.hypot(g.x - car.x, g.z - car.z) < 40; });
+      var nearby = forestBirds.groups.filter(function (g) { return g.birds.some(function (d) { return !d.dead; }) && Math.hypot(g.x - car.x, g.z - car.z) < 40; });
       nextCaw = nearby.length ? 7 + Math.random() * 7 : 2;
-      if (nearby.length) { var g = nearby[Math.floor(Math.random() * nearby.length)]; forestCall(g.birds[Math.floor(Math.random() * g.birds.length)]); }
+      if (nearby.length) { var g = nearby[Math.floor(Math.random() * nearby.length)]; var groupIndex = forestBirds.groups.indexOf(g); var living = g.birds.concat(forestBirds.crows.filter(function (d) { return d.group === groupIndex; })).filter(function (d) { return !d.dead; }); forestCall(living[Math.floor(Math.random() * living.length)]); }
     }
   }
 
@@ -719,18 +808,31 @@
     nextBark -= dt; nextPant -= dt;
     dogs.dogs.forEach(function (d) { d.barkWait = Math.max(0, (d.barkWait || 0) - dt); });
     var nearby = dogs.dogs.filter(function (d) { return Math.hypot(d.x - car.x, d.z - car.z) < 28; });
-    function bark(d) { animalSound(d, 'bark'); d.barkWait = 3 + Math.random() * 2; nextBark = 6 + Math.random() * 5; }
+    function bark(d) {
+      d.barkSeries = { bursts: 2 + Math.floor(Math.random() * 3), notes: 1 + Math.floor(Math.random() * 3), wait: 0 };
+      d.barkWait = nextBark = 6 + Math.random() * 5;
+    }
     nearby.forEach(function (d) {
-      if (d.barkWait > 0) return;
+      if (d.barkWait > 0 || d.barkSeries) return;
       var nearFlock = pigeons.groups.some(function (g) {
-        return Math.hypot(g.x - d.x, g.z - d.z) < 13 && g.birds.some(function (b) { return !b.flight && Math.hypot(b.x - d.x, b.z - d.z) < 8; });
+        return Math.hypot(g.x - d.x, g.z - d.z) < 13 && g.birds.some(function (b) { return !b.dead && !b.flight && Math.hypot(b.x - d.x, b.z - d.z) < 8; });
       });
       if (nearFlock) bark(d);
     });
     if (nextBark <= 0) {
-      var caller = nearby.find(function (d) { return d.barkWait <= 0; });
+      var caller = nearby.find(function (d) { return d.barkWait <= 0 && !d.barkSeries; });
       if (caller) bark(caller); else nextBark = 1;
     }
+    nearby.forEach(function (d) {
+      var series = d.barkSeries;
+      if (!series) return;
+      series.wait -= dt;
+      if (series.wait > 0) return;
+      animalSound(d, 'bark');
+      if (--series.notes > 0) series.wait = 0.22 + Math.random() * 0.13;
+      else if (--series.bursts > 0) { series.notes = 1 + Math.floor(Math.random() * 3); series.wait = 0.7 + Math.random() * 0.7; }
+      else { d.barkSeries = null; d.barkWait = Math.max(d.barkWait, 3); }
+    });
     var runner = nearby.find(function (d) { return d.v > 0.5 && Math.hypot(d.x - car.x, d.z - car.z) < 18; });
     if (nextPant <= 0 && runner) { animalSound(runner, 'pant'); nextPant = 0.16 + Math.random() * 0.08; }
   }
@@ -750,12 +852,12 @@
 
   function duckTick(dt) {
     duckTime += dt;
-    Mallards.update(mallards.birds, dt);
+    if (!doomMode) Mallards.update(mallards.birds, dt);
     var playing = game.mode === 'play' || game.mode === 'free';
     if (duckGain) duckGain.gain.value = state.sound && playing ? 1 : 0;
-    if (!playing || !state.sound || !actx || actx.state !== 'running') return;
+    if (!playing || !state.sound || !actx || actx.state !== 'running' || doomMode) return;
     function callNearby(birds) {
-      var nearby = birds.filter(function (d) { return Math.hypot(d.x - car.x, d.z - car.z) < 32; });
+      var nearby = birds.filter(function (d) { return !d.dead && Math.hypot(d.x - car.x, d.z - car.z) < 32; });
       if (!nearby.length) return false;
       quack(nearby[Math.floor(Math.random() * nearby.length)]);
       return true;
@@ -765,13 +867,34 @@
     if (nextCoot <= 0) nextCoot = callNearby(mallards.coots) ? 15 + Math.random() * 13 : 3;
     nextCoo -= dt;
     if (nextCoo <= 0) {
-      var grounded = pigeons.birds.filter(function (d) { return !d.flight && Math.hypot(d.x - car.x, d.z - car.z) < 28; });
+      var grounded = pigeons.birds.filter(function (d) { return !d.dead && !d.flight && Math.hypot(d.x - car.x, d.z - car.z) < 28; });
       nextCoo = 2;
       if (grounded.length) {
         grounded.sort(function (a, b) { return Math.hypot(a.x - car.x, a.z - car.z) - Math.hypot(b.x - car.x, b.z - car.z); });
         nextCoo = cooSound(grounded[0]) ? 8 + Math.random() * 6 : 2;
       }
     }
+  }
+  function doomGround(x, z) {
+    var raw = catRaw(x, z), surface = raw & 31;
+    return !!(raw & IN_PARK) && !(raw & UNREACHABLE) && !SOLID[surface] && surface !== OUTSIDE && !nearTrunk(x, z, 0.3) && !blockedAt(x, z, 0);
+  }
+  function buildDoomGuns() {
+    var body = new Cloud(), barrels = new Cloud(), flame = new Cloud();
+    for (var z = -0.35; z <= 0.12; z += 0.025) for (var a = 0; a < Math.PI * 2; a += 0.18) {
+      body.add(Math.cos(a) * 0.075, Math.sin(a) * 0.075, z, [62, 65, 69], 0.028, false);
+    }
+    for (var i = 0; i < 6; i++) {
+      var cx = Math.cos(i * Math.PI / 3) * 0.067, cy = Math.sin(i * Math.PI / 3) * 0.067;
+      for (var bz = -0.95; bz <= 0.14; bz += 0.025) for (var ba = 0; ba < Math.PI * 2; ba += 0.55) {
+        barrels.add(cx + Math.cos(ba) * 0.025, cy + Math.sin(ba) * 0.025, bz, [112, 117, 123], 0.023, false);
+      }
+    }
+    for (var fz = 0; fz > -0.36; fz -= 0.018) for (var fa = 0; fa < Math.PI * 2; fa += 0.65) {
+      var radius = 0.055 * (1 + fz / 0.36);
+      flame.add(Math.cos(fa) * radius, Math.sin(fa) * radius, fz, fz > -0.10 ? [255, 247, 176] : [255, 125, 24], 0.04, true);
+    }
+    doomGunGPU = body.upload(); doomBarrelGPU = barrels.upload(); doomFlameGPU = flame.upload();
   }
   function catRaw(x, z) {
     var j = Math.floor((x - park.x0) / park.mpp), i = Math.floor((z - park.z0) / park.mpp);
@@ -1017,6 +1140,7 @@
     return true;
   }
   function forestCall(d) {
+    if (d.dead) return;
     if (!actx || actx.state !== 'running' || !state.sound || document.hidden) return;
     var distance = Math.hypot(d.x - car.x, d.z - car.z, d.y);
     if (distance > 40) return;
@@ -1095,7 +1219,7 @@
     source.connect(filter); filter.connect(gain); gain.connect(pan); pan.connect(duckGain); source.start();
     source.onended = function () { source.disconnect(); filter.disconnect(); gain.disconnect(); pan.disconnect(); };
   }
-  document.addEventListener('visibilitychange', function () { if (document.hidden && duckGain) duckGain.gain.value = 0; });
+  document.addEventListener('visibilitychange', function () { if (document.hidden && duckGain) duckGain.gain.value = 0; syncDoomMusic(); });
   function beep(freq, at, dur, type, vol) {
     if (!actx || !state.sound) return;
     var t = actx.currentTime + at, o = actx.createOscillator(), g = actx.createGain();
@@ -1119,9 +1243,9 @@
     gl.viewport(0, 0, canvas.width, canvas.height);
   }
   function colorUniforms(u) {
-    var mode = state.palette === 'accent' ? 0 : state.palette === 'source' ? 1 : 2;
+    var mode = doomMode ? 0 : state.palette === 'accent' ? 0 : state.palette === 'source' ? 1 : 2;
     gl.uniform1i(u.uMode, mode);
-    gl.uniform3fv(u.uAccent, hex(state.accent));
+    gl.uniform3fv(u.uAccent, doomMode ? [1, 0.09, 0.025] : hex(state.accent));
     gl.uniform3fv(u.uBg, bgColor());
     if (mode === 2) {
       var pal = PALETTES[state.palette], flat = new Float32Array(48);
@@ -1131,11 +1255,12 @@
       gl.uniform1f(u.uSpread, state.dither ? SPREAD[state.palette] : 0);
     }
     gl.uniform1f(u.uDither, state.dither ? 1 : 0);
-    gl.uniform1f(u.uLight, state.night ? 0.5 : 1);
+    gl.uniform1f(u.uLight, doomMode ? 0.65 : state.night ? 0.5 : 1);
   }
-  function bgColor() { return state.night || state.palette === 'accent' ? [0x0a / 255, 0x0a / 255, 0x0a / 255] : [0.70, 0.78, 0.84]; }
+  function bgColor() { if (doomMode) return [0.09, 0.004, 0.003]; return state.night || state.palette === 'accent' ? [0x0a / 255, 0x0a / 255, 0x0a / 255] : [0.70, 0.78, 0.84]; }
   function clearColor() {
     var c = bgColor();
+    if (doomMode) return c;
     if (state.palette === 'source' || state.palette === 'accent') return c;
     var pal = PALETTES[state.palette], best = c, bd = 1e9;   // the sky snaps to the palette too
     pal.forEach(function (h) { var p = hex(h), d = Math.pow(p[0] - c[0], 2) + Math.pow(p[1] - c[1], 2) + Math.pow(p[2] - c[2], 2); if (d < bd) { bd = d; best = p; } });
@@ -1175,6 +1300,7 @@
     colorUniforms(G);
     gl.uniformMatrix4fv(G.uView, false, view);
     gl.uniformMatrix4fv(G.uProj, false, proj);
+    gl.uniform1i(G.uContactN,meshContacts.length/4);gl.uniform4fv(G.uContact,meshContacts);
     gl.uniform4f(G.uFrame, park.x0, park.z0, park.w * park.mpp, park.h * park.mpp);
     gl.uniform1f(G.uTime, time);
     gl.uniform1f(G.uFogNear, fogNear); gl.uniform1f(G.uFogFar, fogFar);
@@ -1182,6 +1308,18 @@
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, albedoTex); gl.uniform1i(G.uAlbedo, 1);
     gl.bindVertexArray(groundVAO);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    meshes.update(eye[0],eye[2],fogFar+96);
+    gl.useProgram(M.prog);colorUniforms(M);
+    gl.uniformMatrix4fv(M.uView,false,view);gl.uniformMatrix4fv(M.uProj,false,proj);
+    gl.uniform3fv(M.uEye,eye);gl.uniform1f(M.uFogNear,fogNear);gl.uniform1f(M.uFogFar,fogFar);
+    var meshTriangles=0,meshBytes=0;
+    meshes.resident.forEach(function(item){
+      var m=item.value;meshBytes+=m.n*40;
+      if(!ParkPerformance.visible(view,m.center[0],m.center[1],m.center[2],m.radius,fov,canvas.width/canvas.height,fogFar+30))return;
+      gl.bindVertexArray(m.vao);gl.drawArrays(gl.TRIANGLES,0,m.n);meshTriangles+=m.n/3;calls++;
+    });
+    window.__stats.mesh={triangles:meshTriangles,resident:meshes.resident.size,bytes:meshBytes};
 
     gl.useProgram(P.prog);
     colorUniforms(P);
@@ -1246,11 +1384,11 @@
     });
 
     mallards.birds.forEach(function (d) {
-      if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
+      if (d.dead || doomMode || Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
       drawCloud(duckGPU[d.species === 'shelduck' ? (d.male ? 3 : 4) : d.species === 'coot' ? 2 : d.male ? 1 : 0], yawMat(d.heading, d.x, 0.012 * Math.sin(duckTime * 2 + d.phase), d.z), 12);
     });
     pigeons.birds.forEach(function (d) {
-      if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
+      if (d.dead || doomMode || Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
       var base = yawMat(d.heading, d.x, d.y + (!d.flight && d.walk ? 0.008 * Math.sin(duckTime * 14 + d.phase) : 0), d.z);
       drawCloud(pigeonGPU, base, 10);
       if (d.flight && d.flight.t > 0) {
@@ -1262,14 +1400,14 @@
       }
     });
     forestBirds.birds.forEach(function (d) {
-      if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
-      var kind = d.species === 'woodpecker' ? 1 : 0;
+      if (d.dead || doomMode || Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
+      var kind = d.species === 'woodpecker' ? 1 : d.species === 'crow' ? 2 : 0;
       var pitch = d.flight ? d.pitch : !d.walk ? -0.85 * Math.pow(Math.max(0, Math.sin(d.phase)), 4) : 0;
       var c = Math.cos(pitch), s = Math.sin(pitch);
       var base = mat4mul(yawMat(d.heading, d.x, d.y + 0.025, d.z), [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
       drawCloud(forestGPU[kind], base, 12);
       if (d.flight) {
-        var angle = Math.sin(d.phase) * 0.9, wc = Math.cos(angle), ws = Math.sin(angle);
+        var angle = Math.sin(d.phase * (kind === 1 ? 1 : 1.3)) * 0.9, wc = Math.cos(angle), ws = Math.sin(angle);
         [-1, 1].forEach(function (side) {
           var wing = [side * wc, ws, 0, 0, -side * ws, wc, 0, 0, 0, 0, 1, 0, side * 0.06, 0.22, 0, 1];
           drawCloud(forestWingGPU[kind], mat4mul(base, wing), 12);
@@ -1277,7 +1415,7 @@
       }
     });
     gulls.birds.forEach(function (d) {
-      if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
+      if (d.dead || doomMode || Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
       var c = Math.cos(d.pitch), s = Math.sin(d.pitch);
       var base = mat4mul(yawMat(d.heading, d.x, d.y, d.z), [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
       drawCloud(gullGPU, base, 12);
@@ -1300,6 +1438,35 @@
         drawCloud(dogLegGPU[d.coat], mat4mul(base, leg), 12);
       }); });
     });
+    function drawDoomBird(d) {
+      if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
+      var bird = d.source, gpu;
+      if (d.kind === 'waterbird') gpu = duckGPU[bird.species === 'shelduck' ? (bird.male ? 3 : 4) : bird.species === 'coot' ? 2 : bird.male ? 1 : 0];
+      else if (d.kind === 'pigeon') gpu = pigeonGPU;
+      else if (d.kind === 'gull') gpu = gullGPU;
+      else gpu = forestGPU[bird.species === 'woodpecker' ? 1 : bird.species === 'crow' ? 2 : 0];
+      var y = d.dead ? 0.025 : (d.kind === 'gull' ? 0.13 : 0.01) + Math.abs(Math.sin(d.phase)) * 0.035;
+      var base = yawMat(d.heading, d.x, y, d.z);
+      if (d.dead) base = mat4mul(base, [1.2, 0, 0, 0, 0, 0.16, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+      drawCloud(gpu, base, 12);
+    }
+    if (doomMode && doomHorde) doomHorde.birds.forEach(function (d) { if (!d.dead) drawDoomBird(d); });
+    doomCorpses.forEach(drawDoomBird);
+    if (doomMode && (game.mode === 'play' || game.mode === 'free')) {
+      [-1, 1].forEach(function (side) {
+        var recoil = Math.max(0, Math.sin(time * 65 + side)) * 0.045;
+        var base = mat4mul(yawMat(car.heading, car.x, 0, car.z), [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, side * (stroller.width / 2 + 0.15), 0.65, recoil, 1]);
+        drawCloud(doomGunGPU, base, 14);
+        var rotor = mat4mul(base, rollMat(time * 22)); drawCloud(doomBarrelGPU, rotor, 14);
+        if (Math.sin(time * 65 + side) > -0.25) {
+          var barrel = Math.floor(time * 18) % 6 * Math.PI / 3;
+          var muzzle = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, Math.cos(barrel) * 0.067, Math.sin(barrel) * 0.067, -0.96, 1];
+          // Flush tinted instances before drawing a flame with its own colors.
+          flushClouds();
+          gl.uniform1i(P.uMode, 1); drawCloud(doomFlameGPU, mat4mul(rotor, muzzle), 18, true); colorUniforms(P);
+        }
+      });
+    }
     if (ferris) {
       var base = yawMat(ferris.yaw, ferris.x, 0, ferris.z);
       drawCloud(ferris.frame, base, 48);
@@ -1361,12 +1528,12 @@
     streamTestError=gl.getError()||streamTestError;
     if(streamTestStage>=streamTestPoses.length) return;
     var pose=streamTestPoses[streamTestStage];car.x=pose[0];car.z=pose[1];car.heading=Math.PI;cam.yaw=Math.PI;
-    if(!world.pending.size) streamTestFrames++;
+    if(!world.pending.size && !meshes.pending.size) streamTestFrames++;
     if(streamTestFrames>60) {
-      streamTestRows.push(Object.assign({stage:streamTestStage},world.stats()));streamTestStage++;streamTestFrames=0;
+      streamTestRows.push(Object.assign({stage:streamTestStage,meshCount:meshes.resident.size,meshEvicted:meshes.evicted},world.stats()));streamTestStage++;streamTestFrames=0;
     }
     streamTestEl.textContent='Streaming route '+streamTestStage+'/4; GL error '+streamTestError+'\n'+streamTestRows.map(function(row) {
-      return row.stage+': '+row.chunks+' chunks; '+(row.bytes/1048576).toFixed(1)+' MiB; loaded '+row.loaded+'; evicted '+row.evicted+'; failures '+row.failures;
+      return row.stage+': '+row.chunks+' chunks; '+(row.bytes/1048576).toFixed(1)+' MiB; loaded '+row.loaded+'; evicted '+row.evicted+'; failures '+row.failures+'; meshes '+row.meshCount+' / evicted '+row.meshEvicted;
     }).join('\n');
   }
   var last = 0, acc = 0, fpsFrames = 0, fpsSince = 0;
@@ -1398,17 +1565,21 @@
     var turboFov = keys.turbo && car.stamina > 0 && keys.up ? 1 : 0;
     cam.fov += (FOV0 + (8 * Math.min(1, Math.abs(car.v) / 7) + 4 * turboFov) * Math.PI / 180 - cam.fov) * Math.min(1, dt * 4);
     duckTick(dt);
+    syncDoomMusic();
     if (game.mode === 'play' || game.mode === 'free') {
       Dogs.update(dogs, dt, car);
       dogSoundTick(dt);
-      forestTick(dt);
+      if (!doomMode) forestTick(dt);
       nextGullCry -= dt;
-      Gulls.update(gulls, dt, function (d) {
+      if (!doomMode) Gulls.update(gulls, dt, function (d) {
         if (nextGullCry <= 0 && Math.hypot(d.x - car.x, d.z - car.z) < 48) {
           animalSound(d, 'gull'); nextGullCry = 8;
         }
       });
-      Pigeons.update(pigeons, dt, car, flapSound, dogs.dogs);
+      if (doomMode) {
+        DoomBirds.update(doomHorde, dt, car, function (d) { doomCorpses.push(d); doomKills++; });
+        $('doomKills').textContent = doomKills;
+      } else Pigeons.update(pigeons, dt, car, flapSound, dogs.dogs);
     }
     draw(now);
     hud(now);
@@ -1420,7 +1591,7 @@
     if (debugEl && now - debugAt > 1000) {
       debugAt = now;
       debugEl.textContent = 'FPS: ' + window.__stats.fps + '\nScans: ' + capturedScans.length + '\nPoints: ' + capturedScans.reduce(function (n, s) { return n + s.gpu.n; }, 0) +
-        '\nDrawn: ' + window.__stats.drawnPoints + ' / calls: ' + window.__stats.drawCalls + ' / CPU ms: ' + window.__stats.renderCpuMs + '\nCar: ' + JSON.stringify(window.__stats.car) + '\nMode: ' + game.mode + '\nResident: ' + JSON.stringify(window.__stats.streaming);
+        '\nDrawn: ' + window.__stats.drawnPoints + ' / calls: ' + window.__stats.drawCalls + ' / CPU ms: ' + window.__stats.renderCpuMs + '\nCar: ' + JSON.stringify(window.__stats.car) + '\nMode: ' + game.mode + '\nResident: ' + JSON.stringify(window.__stats.streaming) + '\nMeshes: '+JSON.stringify(window.__stats.mesh);
     }
   }
 
@@ -1499,7 +1670,12 @@
 
   var KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ShiftLeft: 'turbo', ShiftRight: 'turbo' };
   document.addEventListener('keydown', function (e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+    if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && /^Key[A-Z]$/.test(e.code)) {
+      if (performance.now() - cheatAt > 3000) cheatBuffer = '';
+      cheatAt = performance.now(); cheatBuffer = (cheatBuffer + e.code.slice(3)).slice(-5);
+      if (cheatBuffer === 'IDDQD') { cheatBuffer = ''; toggleDoom(); e.preventDefault(); return; }
+    }
     var k = KEYMAP[e.code];
     if (k) { keys[k] = true; e.preventDefault(); }
     if (e.code === 'KeyV') cam.top = !cam.top;
@@ -1573,6 +1749,7 @@
       if (key === 'pix') place();
       if (key === 'sound' && state.sound) audio();
       if (key === 'sound' && !state.sound && duckGain) duckGain.gain.value = 0;
+      syncDoomMusic();
       syncUI(); save();
       e.target.blur();          // arrow keys drive the stroller, not the slider
     });
@@ -1591,7 +1768,7 @@
   $('free').addEventListener('click', function (e) { e.target.blur(); startGame('free'); });
   function togglePanel() { var p = $('panel'); p.classList.toggle('hidden'); $('toggle').textContent = p.classList.contains('hidden') ? '+' : '−'; }
   function showMenu() {
-    game.mode = 'menu'; game.bottles = [];
+    game.mode = 'menu'; game.bottles = []; syncDoomMusic();
     $('title').textContent = 'Молоко для малыша';
     $('body').innerHTML = '<p>В коляске малыш, и он всё время хочет есть.</p><p>Катай коляску по «Солнечному острову» и собирай бутылочки с молоком. Одной хватает на минуту.</p><p>Молоко кончилось - малыш плачет, игра окончена.</p><p class="dim">WASD / стрелки · Shift - турбо · на телефоне кнопки справа</p>';
     var best = readBest();
@@ -1625,9 +1802,14 @@
       loadImage('park/ground.png'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261020-stream1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261020-mesh1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
+    var meshEntries=ParkMeshes.entries(park);
+    meshes=new ParkStreaming.Stream(meshEntries,uploadMesh,releaseMesh,2);
+    meshContacts=new Float32Array(meshEntries.flatMap(function(e){
+      var b=bbox(e.pts);return [e.cx,e.cz,Math.max(1,(b[2]-b[0])/2),Math.max(1,(b[3]-b[1])/2)];
+    }));
     park.scans = res[3].scans;
     // Replace the former guessed fountain and clear generated vegetation at
     // the supplied real scan locations before creating geometry or collisions.
@@ -1724,6 +1906,7 @@
     buildDogs();
     buildGulls();
     buildForestBirds();
+    buildDoomGuns();
     respawn();
     place();
     statusEl.style.display = 'none';
@@ -1731,6 +1914,7 @@
     showMenu();
     if (new URLSearchParams(location.search).get('tour') === 'fountains') visitScans();
     if (benchmark || streamTest) startGame('free');
+    if(new URLSearchParams(location.search).get('tour')==='details') visitDetails();
     requestAnimationFrame(frame);
   }
   boot().catch(function (err) { statusEl.textContent = 'Ошибка: ' + err.message; console.error(err); });
@@ -1747,6 +1931,17 @@
     }
     if (!found) throw new Error('Нет свободного подхода к фонтанам');
   }
+  var detailStop=0;
+  function visitDetails(){
+    var stops=[[53,-414,22,-Math.PI/2],[-44,-285,24,0],[-155,-258,32,0],[45,-327,15,Math.PI/2]],target=stops[detailStop++%stops.length];
+    for(var ring=0;ring<12;ring+=2)for(var a=target[3];a<target[3]+Math.PI*2;a+=Math.PI/24){
+      var x=target[0]+Math.sin(a)*(target[2]+ring),z=target[1]-Math.cos(a)*(target[2]+ring),heading=Math.atan2(target[0]-x,-(target[1]-z));
+      if([PATH,PLAZA,ROAD].indexOf(catAt(x,z))===-1||blockedAt(x,z,heading))continue;
+      startGame('free');car.x=x;car.z=z;car.heading=heading;car.v=0;
+      cam.yaw=heading;cam.orbit=0;cam.dist=7;cam.pitch=.15;cam.top=false;return;
+    }
+  }
+  $('visitDetails').addEventListener('click',visitDetails);
   $('visitScans').addEventListener('click', visitScans);
 
   // test hooks: drive and play without a keyboard
@@ -1756,6 +1951,7 @@
   window.__mallards = function () { return mallards; };
   window.__pigeons = function () { return pigeons; };
   window.__forestBirds = function () { return forestBirds; };
+  window.__doom = function () { return { active: doomMode, music: doomMusic, horde: doomHorde, corpses: doomCorpses, kills: doomKills }; };
   window.__gulls = function () { return gulls; };
   window.__dogs = function () { return dogs; };
 })();

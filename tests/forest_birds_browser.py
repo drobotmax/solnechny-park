@@ -40,10 +40,10 @@ with sync_playwright() as p:
     page.wait_for_function("window.__stats?.car", timeout=90000)
     counts = page.evaluate("""() => {
       const p=__forestBirds();
-      return {groups:p.groups.length,rooks:p.birds.filter(d=>d.species==='rook').length,woodpeckers:p.woodpeckers.length,
+      return {groups:p.groups.length,rooks:p.birds.filter(d=>d.species==='rook').length,woodpeckers:p.woodpeckers.length,crows:p.crows.length,
         valid:p.birds.every(d=>p.canForage(d.x,d.z))};
     }""")
-    assert counts == {"groups": 10, "rooks": 90, "woodpeckers": 8, "valid": True}, (
+    assert counts == {"groups": 36, "rooks": 324, "woodpeckers": 12, "crows": 36, "valid": True}, (
         counts
     )
     page.click("#free")
@@ -53,6 +53,9 @@ with sync_playwright() as p:
       __car.heading=Math.atan2(g.x-__car.x,-(g.z-__car.z));
       __cam.yaw=__car.heading;__cam.orbit=0;__cam.dist=3;__cam.pitch=.3;
     }""")
+    page.wait_for_function(
+        "__forestBirds().groups[0].birds.every(d=>d.flight)", timeout=5000
+    )
     page.wait_for_function("__forestCalls.rook.length>=3", timeout=20000)
     page.wait_for_timeout(800)
     assert page.evaluate("__forestPeaks.rook") > 0.005
@@ -66,19 +69,23 @@ with sync_playwright() as p:
       });
       const d=p.woodpeckers[best];
       let position=null;
-      for(let a=0;a<6.28;a+=.2){let ok=true;for(let r=0;r<=9;r+=.4)if(!p.canForage(d.x+Math.cos(a)*r,d.z+Math.sin(a)*r)){ok=false;break;}
-        if(ok){position={x:d.x+Math.cos(a)*6,z:d.z+Math.sin(a)*6};break;}}
+      for(let a=0;a<6.28;a+=.2){let ok=true;for(let r=0;r<=13;r+=.4)if(!p.canForage(d.x+Math.cos(a)*r,d.z+Math.sin(a)*r)){ok=false;break;}
+        if(ok){position={x:d.x+Math.cos(a)*10,z:d.z+Math.sin(a)*10};break;}}
       if(!position)throw Error('No clear woodpecker viewpoint');
       __car.x=position.x;__car.z=position.z;__car.v=0;__car.heading=Math.atan2(d.x-__car.x,-(d.z-__car.z));
       __cam.yaw=__car.heading;__cam.orbit=0;__cam.dist=2.5;__cam.pitch=.3;
+      p.woodpeckers.forEach(b=>{b.flight=null;b.y=0;b.walk=null;b.wait=1000;});
+      __forestCalls.woodpecker=[];__forestPeaks.woodpecker=0;
       window.__trackedWoodpecker=d;
-      setInterval(()=>__flightTrace.push({x:d.x,z:d.z,y:d.y,flying:!!d.flight,valid:p.canForage(d.x,d.z)}),30);
+      setInterval(()=>__flightTrace.push({x:d.x,z:d.z,y:d.y,flying:!!d.flight,valid:d.flight?p.canFly(d.x,d.z):p.canForage(d.x,d.z)}),30);
       return best;
     }""")
     page.wait_for_timeout(1000)
     page.screenshot(path=str(out / "woodpecker-ground.png"))
     assert page.evaluate("__forestCalls.woodpecker.length") == 0
-    page.evaluate("__trackedWoodpecker.wait=0")
+    page.evaluate(
+        "__car.x=__trackedWoodpecker.x+2;__car.z=__trackedWoodpecker.z;__car.v=0"
+    )
     page.wait_for_function(
         "__trackedWoodpecker.flight && __trackedWoodpecker.y>.2", timeout=45000
     )
@@ -89,7 +96,8 @@ with sync_playwright() as p:
     page.wait_for_timeout(1300)
     assert page.evaluate("__forestPeaks.woodpecker") > 0.01
     trace = page.evaluate("__flightTrace")
-    assert all(t["valid"] and 0 <= t["y"] < 1.8 for t in trace)
+    bad = [t for t in trace if not t["valid"] or not 0 <= t["y"] < 1.8]
+    assert not bad, bad[:5]
     assert max(t["y"] for t in trace) > 0.5
     before = page.evaluate("__forestCalls.woodpecker.length")
     page.wait_for_timeout(1800)

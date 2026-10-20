@@ -9,7 +9,7 @@ const scans=JSON.parse(fs.readFileSync('park/scans.json')).scans;
 park.landmarks=park.landmarks.filter(l=>l.kind!=='fountain');
 park.trees=park.trees.filter(t=>!scans.some(s=>Math.hypot(t[0]-s.at[0],t[1]-s.at[1])<9));
 const raster=cp.execFileSync('python3',['-c',"from PIL import Image; import sys; sys.stdout.buffer.write(Image.open('park/ground.png').convert('RGB').getchannel('R').tobytes())"],{maxBuffer:32*1024*1024});
-const ctx={console,Float32Array,Float64Array,Uint8Array,Map,Math,MIN_ALPHA:.1,WATER:4,window:{},
+const ctx={ParkMeshes:require('../park-meshes.js'),console,Float32Array,Float64Array,Uint8Array,Map,Math,MIN_ALPHA:.1,WATER:4,window:{},
  catRaw(x,z){const ix=Math.floor((x-park.x0)/park.mpp),iz=Math.floor((z-park.z0)/park.mpp);return ix>=0&&iz>=0&&ix<park.w&&iz<park.h?raster[iz*park.w+ix]:0;}};
 vm.createContext(ctx);
 // Reuse the same geometry and crop functions rather than maintain a second model.
@@ -32,7 +32,7 @@ const world=ctx.buildWorld(park);
 const chunks=world.chunks.map((c,i)=>Object.assign({id:String(i),cx:c.cx,cz:c.cz},writeCloud(c)));
 const raw=ctx.window.SPZ.parse(new Uint8Array(zlib.gunzipSync(fs.readFileSync('karasunsky.spz'))));
 const stroller=writeCloud(ctx.extractStroller(raw));
-const inputHashes=Object.fromEntries(['park.js','park/park.json','park/scans.json','park/ground.png','karasunsky.spz','tools/build-stream-assets.cjs'].map(f=>[f,crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex')]));
+const inputHashes=Object.fromEntries(['park.js','park-meshes.js','park/park.json','park/scans.json','park/ground.png','karasunsky.spz','tools/build-stream-assets.cjs'].map(f=>[f,crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex')]));
 const manifest={inputHashes,version:1,chunkSize:64,worldPoints:world.n,chunks,stroller};
 fs.writeFileSync('park/stream-manifest.json',JSON.stringify(manifest));
 // Remove only obsolete generated assets, never source scans.

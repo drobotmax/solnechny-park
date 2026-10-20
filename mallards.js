@@ -1,6 +1,7 @@
 // Point-cloud waterbirds. Local forward is -Z, matching the stroller.
 (function (root) {
   'use strict';
+  var habitats = typeof module !== 'undefined' && module.exports ? require('./habitat-sites.js') : root.HabitatSites;
   function shape(male, add, kind) {
     function ellipsoid(cx, cy, cz, rx, ry, rz, color) {
       for (var j = 0; j <= 12; j++) {
@@ -82,16 +83,14 @@
         var shore = null;
         for (var a = 0; a < Math.PI * 2; a += Math.PI / 8) {
           var sx = x + Math.cos(a) * 15, sz = z + Math.sin(a) * 15;
-          if ([2, 3, 11].indexOf(catAt(sx, sz)) >= 0) { shore = [sx, sz]; break; }
+          if ([1, 2, 3, 6, 8, 11].indexOf(catAt(sx, sz)) >= 0) { shore = [sx, sz]; break; }
         }
         if (shore && waterDisc(x, z)) sites.push({ x: x, z: z, shore: shore });
       }
     }
-    sites.sort(function (a, b) {
-      return Math.hypot(a.x - park.start[0], a.z - park.start[1]) - Math.hypot(b.x - park.start[0], b.z - park.start[1]);
-    });
+    sites = habitats.order(sites, park.start);
     sites.forEach(function (site) {
-      if (groups.length >= 12 || groups.some(function (g) { return Math.hypot(g.x - site.x, g.z - site.z) < 65; })) return;
+      if (groups.some(function (g) { return Math.hypot(g.x - site.x, g.z - site.z) < 65; })) return;
       var neighbor = sites.find(function (s) {
         var distance = Math.hypot(s.x - site.x, s.z - site.z);
         return distance >= 14 && distance <= 26;
@@ -126,6 +125,7 @@
   }
   function update(ducks, dt) {
     ducks.forEach(function (d) {
+      if (d.dead) return;
       d.phase += dt * d.speed * d.direction;
       d.x = d.cx + Math.cos(d.phase) * d.radius;
       d.z = d.cz + Math.sin(d.phase) * d.radius;

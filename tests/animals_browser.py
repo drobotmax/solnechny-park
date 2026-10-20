@@ -40,7 +40,7 @@ with sync_playwright() as p:
     page.goto(os.environ.get("PARK_URL", "http://127.0.0.1:8791") + "/park.html")
     page.wait_for_function("window.__stats?.car", timeout=90000)
     page.click("#free")
-    assert page.evaluate("__gulls().birds.length") == 72
+    assert page.evaluate("__gulls().birds.length === __mallards().groups.length * 6 && __gulls().birds.length >= 72")
     assert page.evaluate(
         "async () => (await (await fetch('park/park.json')).json()).props.every(p=>p[0]!=='bench')"
     )
@@ -53,11 +53,18 @@ with sync_playwright() as p:
     page.wait_for_function("__animalCalls.bark.length>0", timeout=15000)
     page.wait_for_timeout(500)
     assert page.evaluate("__animalPeaks.bark") > 0.005
-    before = page.evaluate("__animalCalls.bark.length")
-    page.wait_for_timeout(4000)
-    assert page.evaluate("__animalCalls.bark.length") == before
+    page.wait_for_function(
+        "!__dogs().dogs[0].barkSeries && __animalCalls.bark.length>=2", timeout=15000
+    )
+    barks = page.evaluate("__animalCalls.bark")
+    bursts = [1]
+    for a, b in pairwise(barks):
+        if b - a > 0.6:
+            bursts.append(1)
+        else:
+            bursts[-1] += 1
+    assert 2 <= len(bursts) <= 4 and all(1 <= n <= 3 for n in bursts), bursts
     assert page.evaluate("__animalCalls.pant.length") == pant_before
-    barks_before_run = page.evaluate("__animalCalls.bark.length")
     page.evaluate("__dogs().dogs[0].pause=0")
     page.wait_for_function(
         "n=>__animalCalls.pant.length>=n+10", arg=pant_before, timeout=10000
@@ -71,14 +78,23 @@ with sync_playwright() as p:
     assert all(0.14 < t < 0.34 for t in intervals), intervals
     assert max(intervals) - min(intervals) > 0.015, intervals
     assert page.evaluate("__pantDurations.every(d=>Math.abs(d-.16)<.001)")
-    page.wait_for_function(
-        "n=>__animalCalls.bark.length>n", arg=barks_before_run, timeout=5000
-    )
     page.evaluate("__dogs().dogs[0].pause=1000")
     page.wait_for_timeout(400)
     before = page.evaluate("__animalCalls.pant.length")
     page.wait_for_timeout(1800)
     assert page.evaluate("__animalCalls.pant.length") == before
+    # Approaching a grounded flock starts a bark series immediately.
+    barks_before_flock = page.evaluate("__animalCalls.bark.length")
+    page.evaluate("""() => {
+      const g=__pigeons().groups.find(g=>g.size==='large');
+      const d=__dogs().dogs[0];d.x=g.x+3;d.z=g.z;d.pause=1000;d.barkWait=0;d.barkSeries=null;
+      g.birds.forEach(b=>{b.flight=null;b.walk=null;b.x=b.homeX;b.z=b.homeZ;b.y=0;b.pause=1000;});
+      __car.x=g.x-12;__car.z=g.z;__car.v=0;
+    }""")
+    page.wait_for_function(
+        "n=>__animalCalls.bark.length>n && !!__dogs().dogs[0].barkSeries",
+        arg=barks_before_flock, timeout=2000,
+    )
     # Isolate the next dive after the shared call cooldown expires.
     page.evaluate("__gulls().birds.forEach(d=>{d.wait=1000;d.dive=null;})")
     page.wait_for_timeout(8500)
