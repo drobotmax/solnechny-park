@@ -14,11 +14,12 @@ with sync_playwright() as p:
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("""
-      window.__animalCalls={bark:[],pant:[],gull:[]};window.__animalPeaks={bark:0,pant:0,gull:0};
+      window.__pantDurations=[];window.__animalCalls={bark:[],pant:[],gull:[]};window.__animalPeaks={bark:0,pant:0,gull:0};
       const edges=new WeakMap(),connect=AudioNode.prototype.connect;
       AudioNode.prototype.connect=function(dest,...args){edges.set(this,dest);return connect.call(this,dest,...args);};
       function record(source,kind) {
         __animalCalls[kind].push(source.context.currentTime);
+        if(kind==='pant')__pantDurations.push(source.buffer.duration);
         const filter=edges.get(source),gain=edges.get(filter),meter=source.context.createAnalyser();
         meter.fftSize=512;connect.call(gain,meter);
         const timer=setInterval(()=>{const data=new Float32Array(512);meter.getFloatTimeDomainData(data);
@@ -38,7 +39,7 @@ with sync_playwright() as p:
     page.goto(os.environ.get("PARK_URL", "http://127.0.0.1:8791") + "/park.html")
     page.wait_for_function("window.__stats?.car", timeout=90000)
     page.click("#free")
-    assert page.evaluate("__gulls().birds.length") == 36
+    assert page.evaluate("__gulls().birds.length") == 72
     assert page.evaluate(
         "async () => (await (await fetch('park/park.json')).json()).props.every(p=>p[0]!=='bench')"
     )
@@ -57,10 +58,15 @@ with sync_playwright() as p:
     assert page.evaluate("__animalCalls.pant.length") == pant_before
     page.evaluate("__dogs().dogs[0].pause=0")
     page.wait_for_function(
-        "n=>__animalCalls.pant.length>=n+3", arg=pant_before, timeout=10000
+        "n=>__animalCalls.pant.length>=n+10", arg=pant_before, timeout=10000
     )
     page.wait_for_timeout(300)
-    assert page.evaluate("__animalPeaks.pant") > 0.005
+    assert 0.005 < page.evaluate("__animalPeaks.pant") < 0.11
+    intervals = page.evaluate(
+        "__animalCalls.pant.slice(-10).slice(1).map((t,i)=>t-__animalCalls.pant.slice(-10)[i])"
+    )
+    assert all(0.16 < t < 0.28 for t in intervals), intervals
+    assert page.evaluate("__pantDurations.every(d=>Math.abs(d-.08)<.001)")
     page.evaluate("__dogs().dogs[0].pause=1000")
     page.wait_for_timeout(400)
     before = page.evaluate("__animalCalls.pant.length")

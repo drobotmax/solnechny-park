@@ -31,7 +31,7 @@
   function create(groups, random) {
     var birds = [];
     groups.forEach(function (g) {
-      for (var i = 0; i < 3; i++) birds.push({ cx: g.x, cz: g.z,
+      for (var i = 0; i < 6; i++) birds.push({ cx: g.x, cz: g.z,
         x: g.x, z: g.z, y: 9, height: 7 + random() * 6, radius: 3.5 + random() * 1.5,
         phase: random() * Math.PI * 2, speed: 0.45 + random() * 0.2,
         heading: 0, pitch: 0, wing: 0, dive: null, wait: 12 + random() * 45, plunge: random() < 0.5 });

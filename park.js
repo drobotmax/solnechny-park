@@ -628,7 +628,7 @@
       if (nearby.length) animalSound(nearby[0], 'bark');
     }
     var runner = nearby.find(function (d) { return d.v > 0.5 && Math.hypot(d.x - car.x, d.z - car.z) < 18; });
-    if (nextPant <= 0 && runner) { animalSound(runner, 'pant'); nextPant = 0.55; }
+    if (nextPant <= 0 && runner) { animalSound(runner, 'pant'); nextPant = 0.55 / 3; }
   }
 
   function buildDogs() {
@@ -913,11 +913,11 @@
     if (!actx || actx.state !== 'running' || !state.sound || document.hidden) return;
     if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
     var pant = kind === 'pant', gull = kind === 'gull';
-    var duration = pant ? 0.24 : gull ? 0.7 : 0.28;
+    var duration = pant ? 0.08 : gull ? 0.7 : 0.28;
     var source, filter = actx.createBiquadFilter(), gain = actx.createGain(), pan = actx.createStereoPanner();
     var now = actx.currentTime, distance = Math.hypot(d.x - car.x, d.z - car.z, d.y || 0);
     var range = pant ? 18 : gull ? 48 : 32;
-    var volume = Math.pow(Math.max(0, 1 - distance / range), 2) * (pant ? 0.38 : gull ? 0.09 : 0.14);
+    var volume = Math.pow(Math.max(0, 1 - distance / range), 2) * (pant ? 0.19 : gull ? 0.09 : 0.14);
     if (pant) {
       // Low-rate, quantized noise keeps breathing in the same lo-fi palette.
       var buffer = actx.createBuffer(1, Math.ceil(8000 * duration), 8000), samples = buffer.getChannelData(0);
@@ -931,7 +931,7 @@
     }
     filter.type = 'bandpass'; filter.frequency.value = pant ? 1400 : gull ? 1900 : 650; filter.Q.value = pant ? 0.6 : 1;
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(volume, now + 0.025);
+    gain.gain.linearRampToValueAtTime(volume, now + (pant ? 0.008 : 0.025));
     gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
     pan.pan.value = Math.sin(Math.atan2(d.x - car.x, -(d.z - car.z)) - cam.yaw - cam.orbit);
     source.connect(filter); filter.connect(gain); gain.connect(pan); pan.connect(duckGain);
