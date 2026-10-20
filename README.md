@@ -210,3 +210,9 @@ of the older flat striped canopies: three rotating platforms, a low train, a swi
 and a pendulum frame. Their positions follow OSM footprints; shapes and colours are
 stylized approximations, not surveyed replicas. Existing collision and sector streaming
 continue to use the same park data.
+
+### Open ride silhouettes
+
+The remaining unidentified ride footprints use low open platforms, fence segments,
+seats, and armatures instead of opaque striped canopy slabs. Their stylized shapes
+should not be taken as exact replicas of the current real-world attractions.

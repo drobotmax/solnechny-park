@@ -649,15 +649,17 @@
     }
   }
 
-  // Rides from their OSM footprints: round ones become carousels, the roller
-  // coaster a looping track on posts, the rest a striped canopy on a deck.
+  // Unidentified rides retain their OSM footprints but use open, low structures.
+  // The old solid striped roofs hid paths and neighbouring attractions.
   function buildRide(cl, r, ride) {
     var p = ride.pts, n = p.length, i, s, y;
     var cx = 0, cz = 0, area = 0;
     for (i = 0; i < n; i++) { cx += p[i][0]; cz += p[i][1]; var q = p[(i + 1) % n]; area += p[i][0] * q[1] - q[0] * p[i][1]; }
     cx /= n; cz /= n; area = Math.abs(area) / 2;
     var rad = 0; for (i = 0; i < n; i++) rad += Math.hypot(p[i][0] - cx, p[i][1] - cz); rad /= n;
-    var c1 = BRIGHT[Math.floor(r() * BRIGHT.length)], c2 = BRIGHT[Math.floor(r() * BRIGHT.length)];
+    var rideColors = [[176, 92, 72], [203, 160, 91], [93, 137, 137], [133, 119, 149]];
+    var accent = rideColors[Math.floor(r() * rideColors.length)];
+    var steel = [165, 170, 164], deck = [75, 78, 72];
     if (ride.kind === 'coaster') {
       var ring = p.concat([p[0]]).map(function (q) { var d = Math.hypot(q[0] - cx, q[1] - cz) || 1, k = Math.max(0, d - 2.5) / d; return [cx + (q[0] - cx) * k, cz + (q[1] - cz) * k]; });
       polyline(ring, 0.25, function (x, z, d) {
@@ -668,27 +670,40 @@
       });
       return;
     }
-    if (area / (Math.PI * rad * rad) > 0.7) {                     // carousel
-      var R = Math.max(1.5, Math.min(rad, 14)), hs = Math.min(3, 1.5 + R * 0.2), hr = hs + R * 0.55;
-      for (var a = 0; a < 6.283; a += 0.25 / R) {
-        var stripe = Math.floor(a / 6.283 * 16) % 2 ? c1 : c2;
-        for (y = 0.2; y < hs; y += 0.35) cl.add(cx + Math.cos(a) * R, y, cz + Math.sin(a) * R, y > hs - 0.5 ? [240, 236, 220] : mul(stripe, 0.8), 0.25, false);
-        for (s = 0; s < 1; s += 0.3 / R) cl.add(cx + Math.cos(a) * R * (1 - s), hs + (hr - hs) * s, cz + Math.sin(a) * R * (1 - s), stripe, 0.3, false);
+    if (area / (Math.PI * rad * rad) > 0.7) {
+      var R = Math.max(1.5, Math.min(rad * 0.82, 12));
+      for (var a = 0; a < 6.283; a += 0.28 / R) {
+        cl.add(cx + Math.cos(a) * R, 0.18, cz + Math.sin(a) * R, deck, 0.28, false);
+        cl.add(cx + Math.cos(a) * R, 0.95, cz + Math.sin(a) * R, steel, 0.075, false);
       }
-      for (y = hr; y < hr + 1; y += 0.15) cl.add(cx, y, cz, [244, 241, 232], 0.15, false);
+      for (y = 0.2; y < 3.1; y += 0.22) cl.add(cx, y, cz, steel, 0.18, false);
+      for (var arm = 0; arm < 8; arm++) {
+        var angle = arm * Math.PI / 4, ux = Math.cos(angle), uz = Math.sin(angle);
+        for (s = 0.4; s <= R * 0.64; s += 0.3) cl.add(cx + ux * s, 1.3, cz + uz * s, steel, 0.12, false);
+        var sx = cx + ux * R * 0.66, sz = cz + uz * R * 0.66;
+        for (var dx = -0.35; dx <= 0.35; dx += 0.35) for (var dz = -0.3; dz <= 0.3; dz += 0.3)
+          cl.add(sx + dx, 0.55, sz + dz, arm % 2 ? accent : [214, 205, 184], 0.34, false);
+        cl.add(sx, 1.0, sz, [54, 59, 57], 0.34, false);
+      }
       return;
     }
-    var bb = bbox(p), roofH = 3.5 + r() * 2;                      // deck + striped canopy
-    for (var gx = bb[0]; gx <= bb[2]; gx += 0.7) for (var gz = bb[1]; gz <= bb[3]; gz += 0.7) {
+    var bb = bbox(p);                                             // open platform
+    for (var gx = bb[0]; gx <= bb[2]; gx += 0.8) for (var gz = bb[1]; gz <= bb[3]; gz += 0.8) {
       if (!inside(p, gx, gz)) continue;
-      cl.add(gx, 0.25, gz, mul(c1, 0.55), 0.4, false);
-      cl.add(gx, roofH, gz, Math.floor((gx - bb[0]) / 1.4) % 2 ? c2 : [244, 241, 232], 0.45, false);
-      if (r() < 0.03) for (y = 0.3; y < 1.4; y += 0.3) cl.add(gx, y, gz, BRIGHT[Math.floor(r() * BRIGHT.length)], 0.5, false);
+      cl.add(gx, 0.2, gz, deck, 0.36, false);
     }
-    polyline(p.concat([p[0]]), 0.3, function (x, z, d) {
-      cl.add(x, 0.9, z, [235, 235, 230], 0.08, false);
-      if (d % 4 < 0.3) for (y = 0; y < roofH; y += 0.2) cl.add(x, y, z, [210, 210, 210], 0.1, false);
+    polyline(p.concat([p[0]]), 0.35, function (x, z, d) {
+      if (d > 2 && d < 3.5) return;                              // entrance gap
+      cl.add(x, 0.95, z, steel, 0.075, false);
+      if (d % 2.8 < 0.35) for (y = 0.2; y < 1; y += 0.2) cl.add(x, y, z, steel, 0.09, false);
     });
+    for (i = 0; i < n; i += Math.max(1, Math.floor(n / 6))) {
+      var q = p[i], tx = cx + (q[0] - cx) * 0.48, tz = cz + (q[1] - cz) * 0.48;
+      for (s = 0; s < 1; s += 0.12) cl.add(cx + (tx - cx) * s, 1.45, cz + (tz - cz) * s, steel, 0.11, false);
+      cl.add(tx, 0.55, tz, accent, 0.5, false);
+      cl.add(tx, 1.0, tz, [53, 58, 56], 0.35, false);
+    }
+    for (y = 0.2; y < 2.4; y += 0.2) cl.add(cx, y, cz, steel, 0.2, false);
   }
 
   function buildLandmark(cl, r, lm) {
@@ -1843,7 +1858,7 @@
       loadImage('park/ground.png'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261020-rides1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261020-open-rides2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
