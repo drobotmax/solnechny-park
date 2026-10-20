@@ -1,4 +1,4 @@
-"""Solitary jays: native continuous rattling, 20-second meows and sound controls."""
+"""Solitary jays: native harmonic calls, 20-second meows and sound controls."""
 import os
 import tempfile
 from pathlib import Path
@@ -22,7 +22,7 @@ with sync_playwright() as p:
         s.addEventListener('ended',()=>{clearInterval(timer);meter.disconnect();});}
       const Native=AudioContext;
       window.AudioContext=class extends Native {
-        createBufferSource(){const s=super.createBufferSource(),start=s.start.bind(s);s.start=(...args)=>{if(s.buffer?.sampleRate===11025)record(s,'rattle');return start(...args);};return s;}
+        createBufferSource(){const s=super.createBufferSource(),start=s.start.bind(s);s.start=(...args)=>{if(s.buffer?.sampleRate===24000)record(s,'rattle');return start(...args);};return s;}
         createOscillator(){const s=super.createOscillator(),start=s.start.bind(s),set=s.frequency.setValueAtTime.bind(s.frequency);
           s.frequency.setValueAtTime=(v,...args)=>{s.firstFrequency??=v;return set(v,...args);};
           s.start=(...args)=>{if(s.type==='sawtooth'&&s.firstFrequency===660)record(s,'meow');return start(...args);};return s;}
@@ -41,10 +41,10 @@ with sync_playwright() as p:
         __car.heading=Math.atan2(d.x-__car.x,-(d.z-__car.z));__cam.yaw=__car.heading;__cam.orbit=.35;__cam.dist=2;__cam.pitch=.25;return;
       }throw Error('No jay viewpoint');
     }""")
-    page.wait_for_function('__jayCalls.rattle.length>20',timeout=10000)
+    page.wait_for_function('__jayCalls.rattle.length>=10',timeout=10000)
     assert page.evaluate('__jayPeaks.rattle')>.001
-    intervals=page.evaluate('__jayCalls.rattle.slice(-20).slice(1).map((t,i)=>t-__jayCalls.rattle.slice(-20)[i])')
-    assert all(.09<t<.3 for t in intervals),intervals
+    intervals=page.evaluate('__jayCalls.rattle.slice(-10).slice(1).map((t,i)=>t-__jayCalls.rattle.slice(-10)[i])')
+    assert all(.39<t<1.05 for t in intervals),intervals
     page.screenshot(path=str(out/'jay.png'))
     page.wait_for_function('__jayCalls.meow.length>=2',timeout=45000)
     meows=page.evaluate('__jayCalls.meow')
@@ -61,5 +61,5 @@ with sync_playwright() as p:
     assert page.evaluate('JSON.stringify(__jayCalls)')==before
     assert page.evaluate("document.querySelector('#c').getContext('webgl2').getError()") == 0
     assert not errors,errors
-    print('PASS: 30 solitary jays, continuous native rattle, 20-second native meows, flight, mute/menu/WebGL',meows,page.evaluate('__jayPeaks'),flush=True)
+    print('PASS: 30 solitary jays, native harmonic syllables, 20-second native meows, flight, mute/menu/WebGL',meows,page.evaluate('__jayPeaks'),flush=True)
     browser.close()

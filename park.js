@@ -988,15 +988,14 @@
       source.onended = function () { source.disconnect(); filter.disconnect(); gain.disconnect(); pan.disconnect(); };
     }
     if (nextJayRattle <= 0) {
-      nextJayRattle = 0.12;
-      var source = actx.createBufferSource(), buffer = actx.createBuffer(1, Math.ceil(11025 * 0.15), 11025), samples = buffer.getChannelData(0);
-      for (var i = 0; i < samples.length; i++) samples[i] = Math.round((Math.random() * 2 - 1) * 7) / 7 * (0.25 + 0.75 * Math.pow(Math.sin(i / 11025 * Math.PI * 65), 2));
-      source.buffer = buffer;
+      var call = JayVoice.rattle(24000), duration = call.duration;
+      nextJayRattle = duration + 0.12 + Math.random() * 0.24;
+      var source = actx.createBufferSource(), buffer = actx.createBuffer(1, call.samples.length, 24000);
+      buffer.getChannelData(0).set(call.samples); source.buffer = buffer;
       var filter = actx.createBiquadFilter(), gain = actx.createGain();
-      filter.type = 'bandpass'; filter.frequency.value = 1900; filter.Q.value = 1.1;
-      gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(volume * 0.045, now + 0.008);
-      gain.gain.setValueAtTime(volume * 0.045, now + 0.12); gain.gain.linearRampToValueAtTime(0, now + 0.15);
-      connectVoice(source, filter, gain, 0.15);
+      filter.type = 'lowpass'; filter.frequency.value = 7200; filter.Q.value = 0.6;
+      gain.gain.setValueAtTime(volume * 0.05, now);
+      connectVoice(source, filter, gain, duration);
     }
     if (nextJayMeow <= 0) {
       nextJayMeow = 20;

@@ -32,6 +32,7 @@ node --check gulls.js
 node --check forest-birds.js
 node --check doom-birds.js
 node --check small-wildlife.js
+node --check jay-voice.js
 node --test tests/*.test.js
 python3 -m http.server 8791 --bind 127.0.0.1
 ```
@@ -65,8 +66,8 @@ Web Audio после пространственного ослабления, б
 полёт и крики больших пёстрых дятлов, 20 плавающих чомг и мобильную ширину
 проверяет `python3 tests/additional_birds_browser.py`.
 
-Соек проверяет `python3 tests/jays_browser.py`: 30 одиночных птиц, постоянное
-пространственное трещание, два мяуканья с интервалом 20 секунд, взлёт при
+Соек проверяет `python3 tests/jays_browser.py`: 30 одиночных птиц, частые
+пространственные хриплые слоги, два мяуканья с интервалом 20 секунд, взлёт при
 приближении коляски, отключение звука в настройках и меню, WebGL.
 
 Мелких птиц и белок проверяет `python3 tests/small_wildlife_browser.py`:
