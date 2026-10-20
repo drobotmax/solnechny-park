@@ -163,50 +163,74 @@
     '  gl_Position = uProj * v;\n' +
     '  vXZ = aXZ; vDist = -v.z;\n' +
     '}\n';
-  var GROUND_FS = '#version 300 es\n' +
-    'precision highp float;\n' +
-    'in vec2 vXZ;\n' +
-    'in float vDist;\n' +
-    'uniform sampler2D uGround, uAlbedo;\n' +
-    'uniform vec4 uContact[16];\n' +
-    'uniform int uContactN;\n' +
-    'uniform vec4 uFrame;\n' +            // x0, z0, width m, height m
-    'uniform float uTime, uFogNear, uFogFar, uLight;\n' + COLOR +
-    'out vec4 o;\n' +
-    'float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n' +
-    'void main() {\n' +
-    '  vec2 uv = (vXZ - uFrame.xy) / uFrame.zw;\n' +
-    '  int cat = int(texture(uGround, uv).r * 255.0 + 0.5) & 31;\n' +
-    '  vec3 sat = floor(pow(texture(uAlbedo, uv).rgb, vec3(0.8)) * 1.2 * 10.0 + 0.5) / 10.0;\n' +   // dark, hazy imagery: brighten, posterize
-    '  float near = 1.0 - smoothstep(12.0, 45.0, vDist);\n' +
-    '  float h = mix(0.5, hash(floor(vXZ / 0.1)), near);\n' +
-    '  float h2 = hash(floor(vXZ / 0.1) + 17.0);\n' +
-    '  vec3 c = sat * (0.88 + 0.24 * h);\n' +
-    '  if (cat == 11) c = mix(vec3(0.62, 0.60, 0.56), sat, 0.45) * (0.88 + 0.24 * h);\n' +
-    '  if (cat == 2) {\n' +               // paving, like the scanned path
-    '    c = vec3(0.74, 0.71, 0.66) * (0.86 + 0.22 * h);\n' +
-    '    vec2 brick = vec2(vXZ.x + mod(floor(vXZ.y / 0.3), 2.0)*0.3, vXZ.y);\n' +
-    '    vec2 edge = min(fract(brick/vec2(0.6,0.3)), 1.0-fract(brick/vec2(0.6,0.3)));\n' +
-    '    float seam = 1.0-smoothstep(0.025,0.07,min(edge.x,edge.y));\n' +
-    '    c *= 1.0 - seam*near*0.22;\n' +
-    '    if (h2 > 0.975 && near > 0.0) c = mix(c, vec3(0.72, 0.50, 0.25), near);\n' +
-    '  } else if (cat == 3) {\n' +        // park alleys: asphalt
-    '    c = vec3(0.42, 0.42, 0.43) * (0.85 + 0.25 * h);\n' +
-    '    if (h2 > 0.985 && near > 0.0) c = mix(c, vec3(0.75, 0.55, 0.25), near);\n' +
-    '  } else if (cat == 4) {\n' +
-    '    float w = sin(vXZ.x * 0.45 + uTime * 0.9) * sin(vXZ.y * 0.6 - uTime * 1.2);\n' +
-    '    c = mix(vec3(0.17, 0.32, 0.30), sat, 0.35) + (w > 0.82 ? vec3(0.18) : vec3(0.0));\n' +
-    '  } else if (cat == 8) {\n' +        // forest floor under the canopy, leaf litter
-    '    c = mix(vec3(0.26, 0.25, 0.15), sat, 0.25) * (0.75 + 0.5 * h);\n' +
-    '    if (h2 > 0.88 && near > 0.0) c = mix(c, h2 > 0.96 ? vec3(0.78, 0.55, 0.22) : vec3(0.52, 0.40, 0.20), near);\n' +
-    '  } else if (cat == 1) {\n' +        // open lawn, a few fallen leaves
-    '    c = mix(vec3(0.33, 0.50, 0.22), sat, 0.6) * (0.85 + 0.3 * h);\n' +
-    '    if (h2 > 0.96 && near > 0.0) c = mix(c, vec3(0.80, 0.62, 0.25), near);\n' +
-    '  } else if (cat == 7) c = mix(sat, vec3(0.25, 0.58, 0.28), 0.3) * (mod(floor(vXZ.x / 4.0), 2.0) > 0.5 ? 1.0 : 0.9);\n' +
-    '  float contact=0.; for(int i=0;i<16;i++){if(i>=uContactN)break;vec2 d=(vXZ-uContact[i].xy)/uContact[i].zw; contact=max(contact,(1.-smoothstep(.65,1.3,length(d)))*.20); }\n' +
-    '  c*=1.-contact;\n' +
-    '  o = vec4(colorize(c * uLight, smoothstep(uFogNear, uFogFar, vDist)), 1.0);\n' +
-    '}\n';
+  var GROUND_FS = `#version 300 es
+    precision highp float;
+    in vec2 vXZ;
+    in float vDist;
+    uniform sampler2D uGround,uAlbedo;
+    uniform vec4 uContact[16],uFrame;
+    uniform int uContactN;
+    uniform float uTime,uFogNear,uFogFar,uLight;
+  ` + COLOR + `
+    out vec4 o;
+    float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+    int category(vec2 uv){return int(texture(uGround,uv).r*255.+.5)&31;}
+    bool paved(int c){return c==2||c==3||c==9||c==11;}
+    void main(){
+      vec2 uv=(vXZ-uFrame.xy)/uFrame.zw;
+      int cat=category(uv);
+      vec3 sat=pow(texture(uAlbedo,uv).rgb,vec3(.8))*1.2;
+      float near=1.-smoothstep(12.,45.,vDist);
+      // Fade subpixel grain and joints before they shimmer while moving.
+      float pixel=max(length(dFdx(vXZ)),length(dFdy(vXZ)));
+      float grain=(hash(floor(vXZ/.06))-.5)*(1.-smoothstep(.025,.12,pixel));
+      float h=hash(floor(vXZ/.15));
+      vec3 c=sat*(.94+grain*.15);
+      if(cat==2||cat==11){
+        vec2 size=cat==11?vec2(.48,.48):vec2(.6,.3);
+        vec2 p=vXZ;
+        p.x+=mod(floor(p.y/size.y),2.)*size.x*.5;
+        vec2 cell=floor(p/size),edge=min(fract(p/size),1.-fract(p/size))*size;
+        float joint=1.-smoothstep(.009,.009+max(pixel,.004),min(edge.x,edge.y));
+        float jointFade=1.-smoothstep(.06,.25,pixel);
+        float tile=hash(cell);
+        vec3 stone=cat==11?mix(vec3(.58,.54,.48),vec3(.72,.68,.59),tile):mix(vec3(.62,.61,.55),vec3(.77,.73,.65),tile);
+        // A sparse warm tile colour variation, without a repeated chessboard.
+        stone=mix(stone,vec3(.57,.43,.34),step(.91,tile)*.35);
+        c=mix(vec3(.67,.64,.57),stone,jointFade);
+        c*=1.-joint*.25*jointFade;
+        c+=grain*.10;
+      }else if(cat==3||cat==9){
+        float wear=hash(floor(vXZ/2.8));
+        c=vec3(.36,.37,.38)*( .96+.08*wear)+grain*.16;
+      }else if(cat==4){
+        float w=sin(vXZ.x*.45+uTime*.9)*sin(vXZ.y*.6-uTime*1.2);
+        c=mix(vec3(.17,.32,.30),sat,.35)+(w>.82?vec3(.18):vec3(0.));
+      }else if(cat==8){
+        c=mix(vec3(.26,.25,.15),sat,.25)*(.85+.3*h*near);
+        if(h>.88)c=mix(c,h>.96?vec3(.78,.55,.22):vec3(.52,.40,.20),near*.6);
+      }else if(cat==1){
+        c=mix(vec3(.33,.50,.22),sat,.45)*(.92+.16*h*near);
+      }else if(cat==7)c=mix(sat,vec3(.25,.58,.28),.3)*(mod(floor(vXZ.x/4.),2.)>.5?1.:.9);
+      // Sample the existing surface map: borders never alter walkable geometry.
+      if((paved(cat)||cat==1||cat==8)&&vDist<55.){
+        vec2 off=vec2(.38)/uFrame.zw;
+        int a=category(uv+vec2(off.x,0.)),b=category(uv-vec2(off.x,0.));
+        int d=category(uv+vec2(0.,off.y)),e=category(uv-vec2(0.,off.y));
+        bool green=a==1||a==8||b==1||b==8||d==1||d==8||e==1||e==8;
+        bool way=paved(a)||paved(b)||paved(d)||paved(e);
+        float fade=1.-smoothstep(30.,55.,vDist);
+        if(paved(cat)&&green){
+          float segment=fract((vXZ.x+vXZ.y)*1.25);
+          vec3 curb=vec3(.59,.58,.51)*(segment<.035?.77:1.);
+          c=mix(c,curb,fade*.75);
+        }else if((cat==1||cat==8)&&way)c=mix(c,vec3(.35,.32,.20),fade*.38);
+      }
+      float contact=0.;for(int i=0;i<16;i++){if(i>=uContactN)break;vec2 d=(vXZ-uContact[i].xy)/uContact[i].zw;contact=max(contact,(1.-smoothstep(.65,1.3,length(d)))*.20);}
+      c*=1.-contact;
+      o=vec4(colorize(c*uLight,smoothstep(uFogNear,uFogFar,vDist)),1.);
+    }
+  `;
 
   var MESH_VS = `#version 300 es
     layout(location=0) in vec3 aPos;
@@ -460,24 +484,41 @@
   // October in Krasnodar: mostly green, some yellowing, a few orange.
   var CROWNS = [[[58, 98, 40], 0.5], [[74, 112, 46], 0.22], [[140, 140, 56], 0.16], [[186, 116, 46], 0.12]];
   function tree(cl, r, x, z, h, cr, trunkR) {
-    var trunkTop = h * 0.38, tr = trunkR || 0.13;
-    for (var y = 0; y < trunkTop; y += 0.2) {
-      for (var k = 0; k < (tr > 0.3 ? 4 : 1); k++) {
-        var a = r() * 6.28;
-        cl.add(x + Math.cos(a) * tr * 0.6, y, z + Math.sin(a) * tr * 0.6, [86, 64, 46], tr, false);
+    // Keep the mapped trunk and collision footprint; vary only the crown silhouette.
+    var form = r(), slender = form < .22, spreading = form > .72;
+    var tr = trunkR || .13, top = h * (spreading ? .32 : .43);
+    var bark = form < .12 ? [155, 148, 127] : [89, 72, 53];
+    for (var y = 0; y < top; y += .22) {
+      var taper = tr * (1 - .45 * y / top);
+      for (var k = 0; k < (tr > .3 ? 4 : 1); k++) {
+        var angle = r() * Math.PI * 2;
+        cl.add(x + Math.cos(angle)*taper*.5, y, z + Math.sin(angle)*taper*.5,
+          mul(bark, .78 + .3*r()), Math.max(.07,taper), false);
       }
     }
-    var pick = r(), acc = 0, base = CROWNS[0][0];
-    for (var i = 0; i < CROWNS.length; i++) { acc += CROWNS[i][1]; if (pick < acc) { base = CROWNS[i][0]; break; } }
-    var cy = trunkTop + (h - trunkTop) * 0.5, ry = (h - trunkTop) * 0.55;
-    var n = Math.round(50 + cr * 16);
-    var slender = r() < 0.16, spread = 0.85 + r()*0.3;
-    for (var j = 0; j < n; j++) {
-      // uniform direction, radius biased to the surface
-      var u = r() * 2 - 1, th = r() * 6.2832, s = Math.sqrt(1 - u * u), rad = 0.55 + 0.45 * Math.cbrt(r());
-      var dx = s * Math.cos(th) * rad, dy = u * rad, dz = s * Math.sin(th) * rad;
-      var shade = (0.68 + 0.45 * (dy * 0.5 + 0.5)) * (0.85 + 0.3 * r());   // lighter on top
-      cl.add(x + dx * cr * (slender ? 0.55 : spread), cy + dy * ry * (slender ? 1.25 : 1), z + dz * cr, mul(base, shade), 0.45 + r() * 0.45, false);
+    var pick=r(),acc=0,base=CROWNS[0][0];
+    for(var i=0;i<CROWNS.length;i++){acc+=CROWNS[i][1];if(pick<acc){base=CROWNS[i][0];break;}}
+    var lobes=[], count=slender?4:5, rotation=r()*Math.PI*2;
+    for(var j=0;j<count;j++){
+      var a=rotation+j*Math.PI*2/count;
+      var reach=cr*(slender?.22:spreading?.58:.43);
+      var cy=h*(slender?.48+j*.095:.58+r()*.16);
+      var lx=Math.cos(a)*reach,lz=Math.sin(a)*reach;
+      lobes.push([lx,cy,lz,cr*(slender?.48:.64),h*(slender?.23:.26)]);
+      // A few visible forks give depth without bloating every streamed sector.
+      if(j<3)for(var t=0;t<=1;t+=.12)cl.add(x+lx*t,top+(cy-top)*t,z+lz*t,
+        mul(bark,.85),Math.max(.055,tr*(1-t*.65)),false);
+    }
+    lobes.push([0,h*.77,0,cr*(slender?.48:.58),h*.24]);
+    var n=Math.round(50+cr*16);
+    for(var q=0;q<n;q++){
+      var l=lobes[q%lobes.length],u=r()*2-1,th=r()*Math.PI*2;
+      var rad=.60+.40*Math.cbrt(r()), ss=Math.sqrt(1-u*u);
+      var dx=ss*Math.cos(th),dz=ss*Math.sin(th);
+      var shade=(.68+.35*Math.max(0,-.45*dx+.82*u-.32*dz))*(.9+.2*r());
+      var leafSize=Math.max(.30,Math.min(.85,cr*.15))*(.8+.4*r());
+      cl.add(x+l[0]+dx*rad*l[3],l[1]+u*rad*l[4],z+l[2]+dz*rad*l[3],
+        mul(base,shade),leafSize,false);
     }
   }
 
@@ -1802,7 +1843,7 @@
       loadImage('park/ground.png'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261020-mesh1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261020-trees-paths2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
