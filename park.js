@@ -1843,12 +1843,14 @@
       loadImage('park/ground.png'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261020-trees-paths2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261020-rides1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
     meshes=new ParkStreaming.Stream(meshEntries,uploadMesh,releaseMesh,2);
-    meshContacts=new Float32Array(meshEntries.flatMap(function(e){
+    meshContacts=new Float32Array(meshEntries.filter(function(e){
+      return ['building','bumper','carousel','coaster'].indexOf(e.kind)>=0;
+    }).flatMap(function(e){
       var b=bbox(e.pts);return [e.cx,e.cz,Math.max(1,(b[2]-b[0])/2),Math.max(1,(b[3]-b[1])/2)];
     }));
     park.scans = res[3].scans;

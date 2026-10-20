@@ -202,3 +202,11 @@ Paths and plazas use separate procedural paving patterns, asphalt uses fine aggr
 and surface-map borders receive a painted curb and soil transition. These borders are
 visual shading, not raised collision geometry. Fine detail fades at subpixel scale to
 reduce motion shimmer. No external textures are downloaded.
+
+### Ride structures
+
+Six rides around the central attractions area now use open procedural structures in place
+of the older flat striped canopies: three rotating platforms, a low train, a swing tower,
+and a pendulum frame. Their positions follow OSM footprints; shapes and colours are
+stylized approximations, not surveyed replicas. Existing collision and sector streaming
+continue to use the same park data.
