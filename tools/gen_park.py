@@ -216,7 +216,7 @@ for w in ways.values():
             for k in range(int(L // 6) + 1):
                 fr = k * 6 / max(L, 1e-6); try_tree(ax + (bx - ax) * fr, az + (bz - az) * fr, rng.uniform(8, 12), 2.5)
 
-# lamps and benches along the main alleys
+# lamps along the main alleys
 props = []
 for w in main_alleys:
     pts = [loc(*nodes[n]) for n in w['nodes'] if n in nodes]
@@ -232,8 +232,8 @@ for w in main_alleys:
             off = width / 2 + 0.7
             x, z = ax + ux * s - uz * off * side, az + uz * s + ux * off * side
             i, j = int((z - z0) / MPP), int((x - x0) / MPP)
-            if 0 <= i < HPX and 0 <= j < WPX and a[i, j] not in (WATER, BUILDING, RIDE, FENCE) and in_park[i, j]:
-                props.append(['lamp' if side > 0 else 'bench', r2(x), r2(z), round(math.atan2(ux, -uz), 2)])
+            if side > 0 and 0 <= i < HPX and 0 <= j < WPX and a[i, j] not in (WATER, BUILDING, RIDE, FENCE) and in_park[i, j]:
+                props.append(['lamp', r2(x), r2(z), round(math.atan2(ux, -uz), 2)])
             s += 14
         carry = (carry + L) % 14
 
@@ -249,7 +249,6 @@ for e in poi['elements']:
     elif t.get('historic') == 'memorial': landmarks.append({'kind': 'monument', 'at': p}); labels.append([nm or 'Памятник', p, 25])
     elif 'Титан' in nm: landmarks.append({'kind': 'oak', 'at': p}); labels.append([nm, p, 30])
     elif t.get('amenity') == 'ferry_terminal': landmarks.append({'kind': 'pier', 'at': p}); labels.append([nm, p, 18])
-    elif t.get('amenity') == 'bench': props.append(['bench', p[0], p[1], 0])
 for e in poi['elements']:
     t = T(e); g = geom(e)
     if e['type'] == 'way' and t.get('tourism') == 'zoo' and g:
