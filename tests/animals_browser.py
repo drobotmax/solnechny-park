@@ -40,7 +40,7 @@ with sync_playwright() as p:
     page.goto(os.environ.get("PARK_URL", "http://127.0.0.1:8791") + "/park.html")
     page.wait_for_function("window.__stats?.car", timeout=90000)
     page.click("#free")
-    assert page.evaluate("__gulls().birds.length === __mallards().groups.length * 6 && __gulls().birds.length >= 72")
+    assert page.evaluate("__gulls().birds.length === __mallards().groups.length * 24 && __gulls().birds.length >= 72")
     assert page.evaluate(
         "async () => (await (await fetch('park/park.json')).json()).props.every(p=>p[0]!=='bench')"
     )

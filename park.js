@@ -63,7 +63,8 @@
     syncDoomMusic();
     if (doomMode) doomHorde = DoomBirds.create([
       { kind: 'waterbird', birds: mallards.birds }, { kind: 'pigeon', birds: pigeons.birds },
-      { kind: 'gull', birds: gulls.birds }, { kind: 'forest', birds: forestBirds.birds }
+      { kind: 'gull', birds: gulls.birds }, { kind: 'forest', birds: forestBirds.birds },
+      { kind: 'small', birds: smallWildlife.birds }
     ], doomGround, rng(901 + doomKills), car);
     $('doomScore').hidden = !doomMode;
     $('modeToast').textContent = doomMode ? 'DOOM ON' : 'DOOM OFF';
@@ -885,7 +886,8 @@
   var ferris = null, jets = null, bottleGPU = null;
   var capturedScans = [];
   var gulls = { birds: [] }, gullGPU = null, gullWingGPU = null, nextGullCry = 0;
-  var nextBark = 3, nextPant = 0;
+  var smallWildlife = { birds: [], squirrels: [] }, smallGPU = {};
+  var nextBark = 3, nextPant = 0, nextJayRattle = 0, nextJayMeow = 20;
   var forestBirds = { birds: [], groups: [], woodpeckers: [] }, forestGPU = [], forestWingGPU = [], nextCaw = 4;
   var dogs = { dogs: [] }, dogGPU = [], dogLegGPU = [];
   var pigeons = { groups: [], birds: [] }, pigeonGPU = null, wingGPU = null, nextCoo = 2;
@@ -893,7 +895,7 @@
 
   function buildMallards() {
     mallards = Mallards.create(park, catAt, rng(83));
-    duckGPU = [{male: false}, {male: true}, {kind: 'coot'}, {kind: 'shelduck', male: true}, {kind: 'shelduck', male: false}].map(function (bird) {
+    duckGPU = [{male: false}, {male: true}, {kind: 'coot'}, {kind: 'shelduck', male: true}, {kind: 'shelduck', male: false}, {kind: 'grebe'}].map(function (bird) {
       var cl = new Cloud();
       Mallards.shape(bird.male, function (x, y, z, c, s, em) { cl.add(x, y, z, c, s, em); }, bird.kind);
       return cl.upload();
@@ -930,12 +932,81 @@
       var raw = catRaw(x, z), surface = raw & 31;
       return !!(raw & IN_PARK) && !(raw & UNREACHABLE) && !SOLID[surface] && !nearTrunk(x, z, 0.5) && !blockedAt(x, z, 0);
     });
-    ['rook', 'woodpecker', 'crow'].forEach(function (kind) {
+    ['rook', 'woodpecker', 'crow', 'spottedWoodpecker', 'jay'].forEach(function (kind) {
       var body = new Cloud(), wing = new Cloud();
       ForestBirds.shape(kind, function (x, y, z, c, size, em) { body.add(x, y, z, c, size, em); }, false);
       ForestBirds.shape(kind, function (x, y, z, c, size, em) { wing.add(x, y, z, c, size, em); }, true);
       forestGPU.push(body.upload()); forestWingGPU.push(wing.upload());
     });
+  }
+  function buildSmallWildlife() {
+    var paved = { groups: pigeons.groups.filter(function (g) { return !!(catRaw(g.x, g.z) & IN_PARK); }),
+      canLand: function (x, z) { var raw = catRaw(x, z); return !!(raw & IN_PARK) && !(raw & UNREACHABLE) && pigeons.canLand(x, z); } };
+    smallWildlife = SmallWildlife.create(park, paved, forestBirds, rng(2017));
+    ['sparrow', 'tit', 'wagtail', 'squirrel'].forEach(function (kind) {
+      smallGPU[kind] = {};
+      var parts = kind === 'squirrel' ? ['body', 'tail', 'nut'] : kind === 'wagtail' ? ['body', 'tail'] : ['body', 'wing', 'tail'];
+      parts.forEach(function (part) {
+        var cloud = new Cloud();
+        SmallWildlife.shape(kind, part, function (x, y, z, color, size, em) { cloud.add(x, y, z, color, size, em); });
+        smallGPU[kind][part] = cloud.upload();
+      });
+    });
+  }
+  function smallBirdCall(d) {
+    if (!actx || actx.state !== 'running' || !state.sound || document.hidden) return;
+    if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
+    var distance = Math.hypot(d.x - car.x, d.z - car.z, d.y), volume = Math.pow(Math.max(0, 1 - distance / 34), 2) * 0.035;
+    var tit = d.species === 'tit', wagtail = d.species === 'wagtail';
+    var notes = tit ? [2600, 1850, 2600, 1850] : wagtail ? [3200, 3800] : [2400, 3100, 2700];
+    notes.forEach(function (frequency, i) {
+      var osc = actx.createOscillator(), gain = actx.createGain(), pan = actx.createStereoPanner();
+      var at = actx.currentTime + i * (tit ? 0.14 : 0.10), duration = wagtail ? 0.07 : 0.09;
+      osc.type = 'triangle'; osc.frequency.setValueAtTime(frequency, at);
+      osc.frequency.exponentialRampToValueAtTime(frequency * (tit ? 0.92 : wagtail ? 0.85 : 1.18), at + duration);
+      gain.gain.setValueAtTime(0, at); gain.gain.linearRampToValueAtTime(volume, at + 0.008); gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+      pan.pan.value = Math.max(-1, Math.min(1, ((d.x - car.x) * Math.cos(car.heading) + (d.z - car.z) * Math.sin(car.heading)) / 18));
+      osc.connect(gain); gain.connect(pan); pan.connect(duckGain);
+      osc.start(at); osc.stop(at + duration);
+      osc.onended = function () { osc.disconnect(); gain.disconnect(); pan.disconnect(); };
+    });
+  }
+  function jaySoundTick(dt) {
+    if (!actx || actx.state !== 'running' || !state.sound || document.hidden) return;
+    var nearby = forestBirds.jays.filter(function (d) { return !d.dead && Math.hypot(d.x - car.x, d.z - car.z) < 32; });
+    nearby.sort(function (a, b) { return Math.hypot(a.x - car.x, a.z - car.z) - Math.hypot(b.x - car.x, b.z - car.z); });
+    if (!nearby.length) { nextJayMeow = 20; nextJayRattle = 0; return; }
+    if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
+    nextJayRattle -= dt; nextJayMeow -= dt;
+    var d = nearby[0], now = actx.currentTime;
+    var volume = Math.pow(1 - Math.hypot(d.x - car.x, d.z - car.z) / 32, 2);
+    function connectVoice(source, filter, gain, duration) {
+      var pan = actx.createStereoPanner();
+      pan.pan.value = Math.max(-1, Math.min(1, ((d.x - car.x) * Math.cos(car.heading) + (d.z - car.z) * Math.sin(car.heading)) / 18));
+      source.connect(filter); filter.connect(gain); gain.connect(pan); pan.connect(duckGain);
+      source.start(now); source.stop(now + duration);
+      source.onended = function () { source.disconnect(); filter.disconnect(); gain.disconnect(); pan.disconnect(); };
+    }
+    if (nextJayRattle <= 0) {
+      var call = JayVoice.rattle(24000), duration = call.duration;
+      nextJayRattle = duration + 0.12 + Math.random() * 0.24;
+      var source = actx.createBufferSource(), buffer = actx.createBuffer(1, call.samples.length, 24000);
+      buffer.getChannelData(0).set(call.samples); source.buffer = buffer;
+      var filter = actx.createBiquadFilter(), gain = actx.createGain();
+      filter.type = 'lowpass'; filter.frequency.value = 7200; filter.Q.value = 0.6;
+      gain.gain.setValueAtTime(volume * 0.05, now);
+      connectVoice(source, filter, gain, duration);
+    }
+    if (nextJayMeow <= 0) {
+      nextJayMeow = 20;
+      var source = actx.createOscillator(), filter = actx.createBiquadFilter(), gain = actx.createGain();
+      source.type = 'sawtooth'; source.frequency.setValueAtTime(660, now);
+      source.frequency.exponentialRampToValueAtTime(1050, now + 0.18); source.frequency.exponentialRampToValueAtTime(420, now + 0.65);
+      filter.type = 'bandpass'; filter.frequency.value = 1400; filter.Q.value = 2.5;
+      gain.gain.setValueAtTime(0.0001, now); gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume * 0.11), now + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.65);
+      connectVoice(source, filter, gain, 0.65);
+    }
   }
   function forestTick(dt) {
     ForestBirds.update(forestBirds, dt, forestCall, car, dogs.dogs);
@@ -1285,12 +1356,13 @@
     return true;
   }
   function forestCall(d) {
+    if (d.species === 'jay') return;
     if (d.dead) return;
     if (!actx || actx.state !== 'running' || !state.sound || document.hidden) return;
     var distance = Math.hypot(d.x - car.x, d.z - car.z, d.y);
     if (distance > 40) return;
     if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
-    var wood = d.species === 'woodpecker', count = wood ? 7 : 3, spacing = wood ? 0.13 : 0.23;
+    var wood = (d.species === 'woodpecker' || d.species === 'spottedWoodpecker'), count = wood ? 7 : 3, spacing = wood ? 0.13 : 0.23;
     var duration = wood ? 0.1 : 0.18, volume = (wood ? 0.23 : 0.14) * Math.pow(1 - distance / 40, 2);
     var pan = actx.createStereoPanner();
     pan.pan.value = Math.sin(Math.atan2(d.x - car.x, -(d.z - car.z)) - cam.yaw - cam.orbit); pan.connect(duckGain);
@@ -1530,7 +1602,7 @@
 
     mallards.birds.forEach(function (d) {
       if (d.dead || doomMode || Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
-      drawCloud(duckGPU[d.species === 'shelduck' ? (d.male ? 3 : 4) : d.species === 'coot' ? 2 : d.male ? 1 : 0], yawMat(d.heading, d.x, 0.012 * Math.sin(duckTime * 2 + d.phase), d.z), 12);
+      drawCloud(duckGPU[d.species === 'shelduck' ? (d.male ? 3 : 4) : d.species === 'coot' ? 2 : d.species === 'grebe' ? 5 : d.male ? 1 : 0], yawMat(d.heading, d.x, 0.012 * Math.sin(duckTime * 2 + d.phase), d.z), 12);
     });
     pigeons.birds.forEach(function (d) {
       if (d.dead || doomMode || Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
@@ -1546,13 +1618,13 @@
     });
     forestBirds.birds.forEach(function (d) {
       if (d.dead || doomMode || Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
-      var kind = d.species === 'woodpecker' ? 1 : d.species === 'crow' ? 2 : 0;
+      var kind = d.species === 'woodpecker' ? 1 : d.species === 'crow' ? 2 : d.species === 'spottedWoodpecker' ? 3 : d.species === 'jay' ? 4 : 0;
       var pitch = d.flight ? d.pitch : !d.walk ? -0.85 * Math.pow(Math.max(0, Math.sin(d.phase)), 4) : 0;
       var c = Math.cos(pitch), s = Math.sin(pitch);
       var base = mat4mul(yawMat(d.heading, d.x, d.y + 0.025, d.z), [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
       drawCloud(forestGPU[kind], base, 12);
       if (d.flight) {
-        var angle = Math.sin(d.phase * (kind === 1 ? 1 : 1.3)) * 0.9, wc = Math.cos(angle), ws = Math.sin(angle);
+        var angle = Math.sin(d.phase * (kind === 1 || kind === 3 ? 1 : 1.3)) * 0.9, wc = Math.cos(angle), ws = Math.sin(angle);
         [-1, 1].forEach(function (side) {
           var wing = [side * wc, ws, 0, 0, -side * ws, wc, 0, 0, 0, 0, 1, 0, side * 0.06, 0.22, 0, 1];
           drawCloud(forestWingGPU[kind], mat4mul(base, wing), 12);
@@ -1583,17 +1655,41 @@
         drawCloud(dogLegGPU[d.coat], mat4mul(base, leg), 12);
       }); });
     });
+    function drawSmallAnimal(d) {
+      if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar || d.dead) return;
+      var parts = smallGPU[d.species], squirrel = d.species === 'squirrel';
+      var pitch = squirrel && d.action === 'dig' ? -0.35 + Math.sin(d.phase * 2) * 0.2 : 0;
+      var c = Math.cos(pitch), sn = Math.sin(pitch);
+      var base = mat4mul(yawMat(d.heading, d.x, d.y, d.z), [1, 0, 0, 0, 0, c, sn, 0, 0, -sn, c, 0, 0, 0, 0, 1]);
+      drawCloud(parts.body, base, 10);
+      if (squirrel) {
+        drawCloud(parts.tail, base, 10);
+        if (d.carrying) drawCloud(parts.nut, mat4mul(base, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0.14, -0.18, 1]), 10);
+      } else {
+        var tilt = d.species === 'wagtail' ? Math.sin(d.phase) * 0.4 : 0;
+        var tc = Math.cos(tilt), ts = Math.sin(tilt);
+        drawCloud(parts.tail, mat4mul(base, [1, 0, 0, 0, 0, tc, ts, 0, 0, -ts, tc, 0, 0, 0.085, 0.09, 1]), 10);
+        if (d.flight) [-1, 1].forEach(function (side) {
+          var angle = Math.sin(time * 55 + d.phase) * 0.9, wc = Math.cos(angle), ws = Math.sin(angle);
+          drawCloud(parts.wing, mat4mul(base, [side * wc, ws, 0, 0, -side * ws, wc, 0, 0, 0, 0, 1, 0, side * 0.04, 0.13, 0, 1]), 10);
+        });
+      }
+    }
+    if (!doomMode) smallWildlife.birds.forEach(drawSmallAnimal);
+    smallWildlife.squirrels.forEach(drawSmallAnimal);
     function drawDoomBird(d) {
       if (Math.hypot(d.x - eye[0], d.z - eye[2]) > fogFar) return;
       var bird = d.source, gpu;
-      if (d.kind === 'waterbird') gpu = duckGPU[bird.species === 'shelduck' ? (bird.male ? 3 : 4) : bird.species === 'coot' ? 2 : bird.male ? 1 : 0];
+      if (d.kind === 'waterbird') gpu = duckGPU[bird.species === 'shelduck' ? (bird.male ? 3 : 4) : bird.species === 'coot' ? 2 : bird.species === 'grebe' ? 5 : bird.male ? 1 : 0];
       else if (d.kind === 'pigeon') gpu = pigeonGPU;
       else if (d.kind === 'gull') gpu = gullGPU;
-      else gpu = forestGPU[bird.species === 'woodpecker' ? 1 : bird.species === 'crow' ? 2 : 0];
+      else if (d.kind === 'small') gpu = smallGPU[bird.species].body;
+      else gpu = forestGPU[bird.species === 'woodpecker' ? 1 : bird.species === 'crow' ? 2 : bird.species === 'spottedWoodpecker' ? 3 : bird.species === 'jay' ? 4 : 0];
       var y = d.dead ? 0.025 : (d.kind === 'gull' ? 0.13 : 0.01) + Math.abs(Math.sin(d.phase)) * 0.035;
       var base = yawMat(d.heading, d.x, y, d.z);
       if (d.dead) base = mat4mul(base, [1.2, 0, 0, 0, 0, 0.16, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
       drawCloud(gpu, base, 12);
+      if (d.kind === 'small') drawCloud(smallGPU[bird.species].tail, mat4mul(base, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0.085, 0.09, 1]), 10);
     }
     if (doomMode && doomHorde) doomHorde.birds.forEach(function (d) { if (!d.dead) drawDoomBird(d); });
     doomCorpses.forEach(drawDoomBird);
@@ -1714,7 +1810,8 @@
     if (game.mode === 'play' || game.mode === 'free') {
       Dogs.update(dogs, dt, car);
       dogSoundTick(dt);
-      if (!doomMode) forestTick(dt);
+      SmallWildlife.update(smallWildlife, dt, car, dogs.dogs, smallBirdCall, !doomMode);
+      if (!doomMode) { forestTick(dt); jaySoundTick(dt); }
       nextGullCry -= dt;
       if (!doomMode) Gulls.update(gulls, dt, function (d) {
         if (nextGullCry <= 0 && Math.hypot(d.x - car.x, d.z - car.z) < 48) {
@@ -2055,6 +2152,7 @@
     buildDogs();
     buildGulls();
     buildForestBirds();
+    buildSmallWildlife();
     buildDoomGuns();
     respawn();
     place();
@@ -2100,6 +2198,7 @@
   window.__mallards = function () { return mallards; };
   window.__pigeons = function () { return pigeons; };
   window.__forestBirds = function () { return forestBirds; };
+  window.__smallWildlife = function () { return smallWildlife; };
   window.__doom = function () { return { active: doomMode, music: doomMusic, horde: doomHorde, corpses: doomCorpses, kills: doomKills }; };
   window.__gulls = function () { return gulls; };
   window.__dogs = function () { return dogs; };

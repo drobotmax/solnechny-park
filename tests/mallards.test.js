@@ -101,3 +101,18 @@ test('distant separate waterbodies receive flocks regardless of the starting sho
     assert.equal(m.shelducks.length, 3);
   }
 });
+
+test('twenty solitary grebes spread over water with separate territories and full swimming orbits',()=>{
+ const p={...park,w:1200,h:1200};
+ const water=(x,z)=>x>12&&x<1188&&((z>20&&z<250)||(z>900&&z<1180))?4:1;
+ const pop=Mallards.create(p,water,()=>.4);
+ assert.equal(pop.grebes.length,20);
+ assert.ok(pop.grebes.some(d=>d.cz>900)&&pop.grebes.some(d=>d.cz<250));
+ for(const d of pop.grebes)for(const other of pop.grebes)if(d!==other)assert.ok(Math.hypot(d.cx-other.cx,d.cz-other.cz)>=80);
+ for(let i=0;i<400;i++){
+  Mallards.update(pop.grebes,1);
+  assert.ok(pop.grebes.every(d=>water(d.x,d.z)===4&&water(d.x-.2,d.z)===4&&water(d.x+.2,d.z)===4));
+ }
+ const colors=new Set();Mallards.shape(false,(x,y,z,c,size)=>{assert.ok([x,y,z,...c,size].every(Number.isFinite));colors.add(c.join(','));},'grebe');
+ for(const c of ['237,233,216','29,31,30','158,79,43'])assert.ok(colors.has(c));
+});

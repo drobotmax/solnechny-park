@@ -40,10 +40,10 @@ with sync_playwright() as p:
     page.wait_for_function("window.__stats?.car", timeout=90000)
     counts = page.evaluate("""() => {
       const p=__forestBirds();
-      return {groups:p.groups.length,rooks:p.birds.filter(d=>d.species==='rook').length,woodpeckers:p.woodpeckers.length,crows:p.crows.length,
+      return {groups:p.groups.length,rooks:p.birds.filter(d=>d.species==='rook').length,woodpeckers:p.woodpeckers.length,spotted:p.spottedWoodpeckers.length,jays:p.jays.length,crows:p.crows.length,
         valid:p.birds.every(d=>p.canForage(d.x,d.z))};
     }""")
-    assert counts == {"groups": 36, "rooks": 324, "woodpeckers": 12, "crows": 36, "valid": True}, (
+    assert counts == {"groups": 36, "rooks": 324, "woodpeckers": 12, "spotted": 60, "jays": 30, "crows": 36, "valid": True}, (
         counts
     )
     page.click("#free")

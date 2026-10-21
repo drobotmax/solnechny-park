@@ -16,6 +16,22 @@
         }
       }
     }
+    if (kind === 'grebe') {
+      ellipsoid(0, 0.12, 0.06, 0.14, 0.11, 0.29, [100, 94, 80]);
+      ellipsoid(0, 0.10, -0.12, 0.105, 0.09, 0.15, [226, 224, 207]);
+      ellipsoid(0, 0.32, -0.20, 0.042, 0.22, 0.046, [228, 225, 208]);
+      ellipsoid(0, 0.55, -0.22, 0.070, 0.067, 0.085, [237, 233, 216]);
+      ellipsoid(0, 0.61, -0.20, 0.070, 0.025, 0.085, [29, 31, 30]);
+      ellipsoid(0, 0.54, -0.36, 0.020, 0.015, 0.085, [170, 130, 115]);
+      [-1, 1].forEach(function (side) {
+        ellipsoid(side * 0.07, 0.49, -0.16, 0.04, 0.065, 0.05, [158, 79, 43]);
+        ellipsoid(side * 0.085, 0.48, -0.13, 0.025, 0.055, 0.035, [34, 32, 29]);
+        ellipsoid(side * 0.045, 0.64, -0.15, 0.020, 0.052, 0.04, [27, 29, 28]);
+        ellipsoid(side * 0.063, 0.565, -0.255, 0.009, 0.010, 0.009, [168, 44, 34]);
+        ellipsoid(side * 0.13, 0.15, 0.07, 0.023, 0.065, 0.22, [79, 76, 65]);
+      });
+      return;
+    }
     if (kind === 'shelduck') {
       ellipsoid(0, 0.22, 0.04, 0.21, 0.20, 0.36, [203, 103, 35]);
       ellipsoid(0, 0.32, -0.20, 0.095, 0.17, 0.10, [219, 141, 57]);
@@ -64,7 +80,7 @@
   }
 
   function create(park, catAt, random) {
-    var sites = [], groups = [], ducks = [], coots = [], shelducks = [], rareGroups = [], spacing = 6, radius = 6.2;
+    var sites = [], groups = [], ducks = [], coots = [], shelducks = [], grebes = [], rareGroups = [], spacing = 6, radius = 6.2;
     // Entire swimming disc must be real mapped water, including its interior.
     function waterDisc(x, z) {
       var step = park.mpp, half = step / 2;
@@ -121,7 +137,14 @@
           x: site.x, z: site.z, radius: 2.2, phase: phase, speed: 0.025, direction: 1, heading: 0 });
       }
     });
-    return { groups: groups, ducks: ducks, coots: coots, shelducks: shelducks, rareGroups: rareGroups, birds: ducks.concat(coots, shelducks) };
+    // Twenty solitary territories, spread across verified swimming discs.
+    sites.forEach(function (site) {
+      if (grebes.length >= 20 || grebes.some(function (d) { return Math.hypot(d.cx - site.x, d.cz - site.z) < 80; })) return;
+      if (groups.some(function (g) { return Math.hypot(g.x - site.x, g.z - site.z) < 13 || Math.hypot(g.coots.x - site.x, g.coots.z - site.z) < 13; })) return;
+      grebes.push({ species: 'grebe', shore: site.shore, cx: site.x, cz: site.z, x: site.x, z: site.z,
+        radius: 2 + random() * 3, phase: random() * Math.PI * 2, speed: 0.035 + random() * 0.02, direction: random() < 0.5 ? -1 : 1, heading: 0 });
+    });
+    return { groups: groups, ducks: ducks, coots: coots, shelducks: shelducks, grebes: grebes, rareGroups: rareGroups, birds: ducks.concat(coots, shelducks, grebes) };
   }
   function update(ducks, dt) {
     ducks.forEach(function (d) {
