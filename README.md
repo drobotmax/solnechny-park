@@ -274,4 +274,6 @@ The two mapped structures east of the entrance bridge now have distinct silhouet
 a dark gabled cafe with service windows and a bicycle sign, and an open arched stage
 with a red backdrop and low fascia. A row of red bicycle stands marks the forecourt.
 Their footprints come from OSM; dimensions and details follow a user-supplied panorama
-and remain approximate. Reference notes record the mapped objects and limits.
+and remain approximate. Their visible fronts face the bridge approach, with the stage
+slightly angled and the cafe set across the bridge axis. Reference notes record the
+mapped objects and limits.

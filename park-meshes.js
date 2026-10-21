@@ -78,10 +78,10 @@ function footprintPoint(p,u,v,y){
  return [front[0]*(1-v)+back[0]*v,y,front[1]*(1-v)+back[1]*v];
 }
 function bikeCafe(g,e){
- const p=[e.pts[1],e.pts[2],e.pts[3],e.pts[0]],at=(u,v,y)=>footprintPoint(p,u,v,y),wall=[.42,.34,.26],wood=[.25,.20,.17],roof=[.16,.17,.17],slate=[.22,.23,.23];
+ const p=e.pts,at=(u,v,y)=>footprintPoint(p,u,v,y),wall=[.42,.34,.26],wood=[.25,.20,.17],roof=[.16,.17,.17],slate=[.22,.23,.23];
  for(const [u0,v0,u1,v1] of [[0,0,1,0],[1,0,1,1],[1,1,0,1],[0,1,0,0]])
   g.quad(at(u0,v0,0),at(u1,v1,0),at(u1,v1,3.35),at(u0,v0,3.35),wall,1);
- // The south-facing gable and deep dark roof are prominent from the plaza.
+ // The west-facing gable is perpendicular to the bridge approach.
  for(const v of [0,1])g.tri(at(0,v,3.35),at(.5,v,6.1),at(1,v,3.35),wood,1);
  g.quad(at(-.055,-.045,3.35),at(.5,-.045,6.35),at(.5,1.045,6.35),at(-.055,1.045,3.35),roof,4);
  g.quad(at(.5,-.045,6.35),at(1.055,-.045,3.35),at(1.055,1.045,3.35),at(.5,1.045,6.35),slate,4);
@@ -108,7 +108,8 @@ function bikeCafe(g,e){
  g.beam(front(.215,2.77),front(.28,2.58),.018,C.trim,2,4);
 }
 function plazaStage(g,e){
- const p=[e.pts[1],e.pts[2],e.pts[3],e.pts[0]];
+ // The western edge turns slightly toward the bridge; the open arch faces it.
+ const p=e.pts;
  const at=(u,v,y)=>footprintPoint(p,u,v,y),fascia=[.57,.60,.30],red=[.55,.12,.10];
  g.quad(at(0,0,1.05),at(1,0,1.05),at(1,1,1.05),at(0,1,1.05),C.dark,1);
  for(const [u0,v0,u1,v1] of [[0,0,1,0],[1,0,1,1],[1,1,0,1],[0,1,0,0]])
