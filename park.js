@@ -21,6 +21,8 @@
   var SURF = {};
   SURF[PATH] = [1, 0.5]; SURF[ROAD] = [1, 0.45]; SURF[PLAZA] = [1, 0.6]; SURF[PARKING] = [1, 0.6];
   SURF[LAWN] = [0.62, 2.2]; SURF[WOOD] = [0.5, 2.8]; SURF[OUTSIDE] = [0.55, 2.4]; SURF[SAND] = [0.4, 3.5]; SURF[PITCH] = [0.8, 1.4];
+  // Boundary traced from the user's marked aerial view; the whole forecourt is asphalt.
+  var plazaAsphaltFootprint = [[53.71,-380.09],[57.96,-397.52],[52.15,-398.55],[38.61,-401.02],[16.09,-400.4],[1.04,-399.32],[-15.77,-392.47],[-16.52,-385.3],[6.47,-367.62],[34.97,-371.43]];
 
   // Stroller physics, at speed ×1. Running pace with a parent behind it, a
   // short sprint on turbo; a stroller pivots on the spot, so steering works
@@ -724,9 +726,10 @@
         cl.add(x1+(x2-x1)*t, y1+(y2-y1)*t, z1+(z2-z1)*t, [116, 43, 51], .05, false);
       }
     }
-    var sideX = 1 / Math.hypot(2.5, 1), sideZ = 2.5 / Math.hypot(2.5, 1);
+    var rackDx = -5.1, rackDz = 1.05, rackLength = Math.hypot(rackDx, rackDz);
+    var sideX = rackDz / rackLength, sideZ = -rackDx / rackLength;
     for (var rack = 0; rack < 11; rack++) {
-      var cx = 43 - 2.5 * rack, cz = -395 + rack;
+      var cx = 43.6 + rackDx * rack, cz = -396.2 + rackDz * rack;
       var lx = cx - sideX * .67, lz = cz - sideZ * .67;
       var rx = cx + sideX * .67, rz = cz + sideZ * .67;
       rackLine(lx, .05, lz, lx, .66, lz);
@@ -2063,7 +2066,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261021-plaza-cafe3').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261021-plaza-cafe4').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2102,6 +2105,14 @@
         if (ix >= 0 && iz >= 0 && ix < park.w && iz < park.h) cats[iz * park.w + ix] = FENCE | IN_PARK;
       }
     });
+    var plazaBox=bbox(plazaAsphaltFootprint);
+    for (var z=plazaBox[1]; z<=plazaBox[3]; z+=park.mpp) for (var x=plazaBox[0]; x<=plazaBox[2]; x+=park.mpp) {
+      if (!inside(plazaAsphaltFootprint,x,z)) continue;
+      var ix=Math.floor((x-park.x0)/park.mpp), iz=Math.floor((z-park.z0)/park.mpp);
+      if (ix<0 || iz<0 || ix>=park.w || iz>=park.h) continue;
+      var index=iz*park.w+ix;
+      if (!SOLID[cats[index]&31]) cats[index]=ROAD|IN_PARK;
+    }
     var stageBox=bbox(stageFootprint);
     for (var z=stageBox[1]; z<=stageBox[3]; z+=park.mpp) for (var x=stageBox[0]; x<=stageBox[2]; x+=park.mpp) {
       if (!inside(stageFootprint,x,z)) continue;

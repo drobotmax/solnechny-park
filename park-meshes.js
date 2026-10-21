@@ -3,7 +3,7 @@
 'use strict';
 const buildingIds=[3,5,6,7,49,50,81], rideIds=[0,1,2,6,9,17,25,26,27,36];
 // Placed and scaled to the stage rectangle marked in the user's plaza screenshot.
-const plazaStageFootprint=[[41.93,-391.74],[36.53,-381.06],[42.08,-378.26],[47.48,-388.94]];
+const plazaStageFootprint=[[49.93,-379.74],[44.53,-369.06],[50.08,-366.26],[55.48,-376.94]];
 const C={cream:[.80,.75,.63],trim:[.92,.89,.80],roof:[.28,.20,.16],glass:[.18,.30,.33],red:[.68,.12,.10],steel:[.57,.60,.58],gold:[.73,.53,.20],dark:[.12,.15,.15]};
 function center(p){return p.reduce((a,b)=>[a[0]+b[0]/p.length,a[1]+b[1]/p.length],[0,0]);}
 function entries(park){
@@ -82,7 +82,7 @@ function footprintPoint(p,u,v,y){
  return [front[0]*(1-v)+back[0]*v,y,front[1]*(1-v)+back[1]*v];
 }
 function bikeCafe(g,e){
- const p=[e.pts[1],e.pts[2],e.pts[3],e.pts[0]],at=(u,v,y)=>footprintPoint(p,u,v,y),wall=[.42,.34,.26],wood=[.25,.20,.17],roof=[.16,.17,.17],slate=[.22,.23,.23];
+ const p=[e.pts[1],e.pts[2],e.pts[3],e.pts[0]],at=(u,v,y)=>footprintPoint(p,u,v,y),wall=[.58,.38,.26],wood=[.19,.18,.18],roof=[.16,.17,.17],slate=[.22,.23,.23];
  for(const [u0,v0,u1,v1] of [[0,0,1,0],[1,0,1,1],[1,1,0,1],[0,1,0,0]])
   g.quad(at(u0,v0,0),at(u1,v1,0),at(u1,v1,3.35),at(u0,v0,3.35),wall,1);
  // The long service frontage faces the bridge approach.
@@ -94,6 +94,9 @@ function bikeCafe(g,e){
   g.beam(at(u,v,y),at(u,v===-.045?1.045:-.045,y),.07,C.dark,2,4);
  }
  const front=(u,y)=>at(u,-.012,y);
+ // Horizontal timber courses and a dark sign fascia follow the supplied cafe photos.
+ for(let y=.28;y<3.3;y+=.3)g.beam(front(0,y),front(1,y),.035,[.7,.48,.32],2,4);
+ g.quad(front(.04,2.9),front(.95,2.9),front(.95,3.25),front(.04,3.25),C.dark,1);
  // Service windows, an open-looking doorway and a modest bicycle sign.
  for(const [u0,u1] of [[.08,.34],[.66,.94]]){
   g.quad(front(u0,1.05),front(u1,1.05),front(u1,2.72),front(u0,2.72),C.glass,3);
@@ -110,6 +113,22 @@ function bikeCafe(g,e){
  }
  g.beam(front(.15,2.58),front(.215,2.77),.018,C.trim,2,4);
  g.beam(front(.215,2.77),front(.28,2.58),.018,C.trim,2,4);
+ // Ten parked bicycles stand outside the service frontage, leaving the door clear.
+ const bikeSlots=[.07,.145,.22,.295,.63,.695,.76,.825,.89,.955];
+ bikeSlots.forEach((u,i)=>{
+  const q=(du,y)=>at(u+du,-.19,y),frame=i%3===0?[.56,.16,.20]:i%3===1?[.20,.35,.45]:[.25,.28,.22];
+  for(const wheel of [-.026,.026])for(let k=0;k<12;k++){
+   const a=k*Math.PI/6,b=(k+1)*Math.PI/6;
+   g.beam(q(wheel+Math.cos(a)*.014,.42+Math.sin(a)*.34),q(wheel+Math.cos(b)*.014,.42+Math.sin(b)*.34),.018,C.dark,2,4);
+  }
+  g.beam(q(-.026,.42),q(-.008,.83),.026,frame,2,4);
+  g.beam(q(-.008,.83),q(.006,.42),.026,frame,2,4);
+  g.beam(q(.006,.42),q(-.026,.42),.026,frame,2,4);
+  g.beam(q(-.008,.83),q(.026,.42),.025,frame,2,4);
+  g.beam(q(.026,.42),q(.018,.87),.026,frame,2,4);
+  g.beam(q(-.019,.87),q(.002,.87),.035,C.dark,2,4);
+  g.beam(q(.012,.89),q(.033,.89),.033,C.dark,2,4);
+ });
 }
 function plazaStage(g,e){
  // The western edge turns slightly toward the bridge; the open arch faces it.

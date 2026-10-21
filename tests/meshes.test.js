@@ -24,6 +24,7 @@ test('mapped models retain their footprints; plaza stage uses the corrected smal
  assert.equal(cafe.id,'b7');
  assert.equal(stage.id,'plaza-stage');
  assert(stage.cx<cafe.cx);
+ assert(Math.hypot(stage.cx-51,stage.cz+373.46)<2.5,'stage stays near the marked plaza edge');
  const depth=p=>Math.hypot(p[3][0]-p[0][0],p[3][1]-p[0][1]);
  assert(depth(stage.pts)<depth(cafe.pts)*.3);
  assert.equal(models.length,buildingIds.length+rideIds.length+1);
