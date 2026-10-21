@@ -15,7 +15,7 @@
   var RESUME = 2500;                // ms after a drag before the idle spin returns
   var FOV = 35 * Math.PI / 180;
   var MIN_ALPHA = 0.1;
-  var SRC = 'karasunsky.spz';
+  var SRC = 'karasunsky.spz?v=20261021-no-face1';
   var SCENES = {
     stroller: { name: 'КОЛЯСКА', src: SRC, radius: 1.8 },
     fountainA: { name: 'ФОНТАН · 1', src: 'captures/2026-10-19/fountain-a-crop.spz', radius: 8.5,

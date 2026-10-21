@@ -36,6 +36,18 @@ test('all shipped sectors and stroller decode with finite attributes and matchin
  }
  assert.equal(count,manifest.worldPoints);
 });
+test('published stroller scan and packed model omit the baby face',()=>{
+ const raw=zlib.gunzipSync(fs.readFileSync(require.resolve('../karasunsky.spz')));
+ assert.equal(raw.readUInt32LE(8),631667);
+ const manifest=JSON.parse(fs.readFileSync(require.resolve('../park/stream-manifest.json')));
+ const stroller=decode(new Uint8Array(zlib.gunzipSync(fs.readFileSync(require.resolve('../'+manifest.stroller.src)))));
+ let visibleFace=0;
+ for(let i=0;i<stroller.size.length;i++) {
+  const x=stroller.pos[i*3],y=stroller.pos[i*3+1],z=stroller.pos[i*3+2];
+  if(((x+.02)/.12)**2+((y-.565)/.07)**2+((z+.17)/.16)**2<1) visibleFace++;
+ }
+ assert.equal(visibleFace,0);
+});
 test('malformed point files fail before GPU upload',()=>{
  assert.throws(()=>decode(new Uint8Array(16)),/header/);
  const buf=new ArrayBuffer(16);const v=new DataView(buf);v.setUint32(0,0x31504350,true);v.setUint32(4,2,true);

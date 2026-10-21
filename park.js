@@ -392,7 +392,7 @@
   // the principal axis as its length, keep everything a few cm above the
   // fitted ground inside that box. Local frame: ground at y = 0, forward = -z.
   // Which end is the front was checked by eye: the handle is at the back.
-  function extractStroller(c) {
+  function extractStroller(c, includeSourceIndices) {
     var i, xs = [], zs = [], ys = [];
     var step = Math.max(1, Math.floor(c.n / 60000));
     for (i = 0; i < c.n; i += step) {
@@ -443,20 +443,30 @@
       col[k * 4 + 3] = 255;
       size[k] = Math.min(c.size[j], 0.05);
     });
-    return { pos: pos, col: col, size: size, length: a1 - a0, width: c1 - c0 };
+    return { pos: pos, col: col, size: size, length: a1 - a0, width: c1 - c0,
+      sourceIndices: includeSourceIndices ? Uint32Array.from(keep) : null };
+  }
+
+  function bundledBabyFace(x, y, z) {
+    return Math.pow((x + 0.02) / 0.12, 2) +
+      Math.pow((y - 0.565) / 0.07, 2) + Math.pow((z + 0.17) / 0.16, 2) < 1;
   }
 
   // The scan preserves the hood and basket, but its four wheels are noisy and
   // fixed in place. Replace only their low outer clusters with rolling wheels.
-  function prepareStroller(s) {
+  function prepareStroller(s, hideBabyFace) {
     var axle = s.width * 0.38;
     var wheels = [
       { z: -s.length * 0.36, radius: Math.min(0.075, s.length * 0.065), front: true },
       { z: s.length * 0.19, radius: Math.min(0.105, s.length * 0.08), front: false }
     ];
-    var pos = [], col = [], size = [];
+    var pos = [], col = [], size = [], removedFace = 0;
     for (var i = 0; i < s.size.length; i++) {
       var x = s.pos[i * 3], y = s.pos[i * 3 + 1], z = s.pos[i * 3 + 2];
+      // Remove the small face under the handle in the bundled scan only.
+      // The separate hanging toy is behind the basket and stays intact.
+      var face = hideBabyFace && bundledBabyFace(x, y, z);
+      if (face) { removedFace++; continue; }
       var scannedWheel = wheels.some(function (wheel) {
         return Math.abs(Math.abs(x) - axle) < 0.085 &&
           Math.hypot(y - wheel.radius, z - wheel.z) < s.length * (wheel.front ? 0.13 : 0.145);
@@ -468,7 +478,7 @@
     }
     wheels.forEach(function (wheel) { wheel.gpu = buildStrollerWheel(wheel.radius); });
     return { gpu: cloudVAO(new Float32Array(pos), new Uint8Array(col), new Float32Array(size)),
-      wheels: wheels, axle: axle, length: s.length, width: s.width };
+      wheels: wheels, axle: axle, length: s.length, width: s.width, removedFace: removedFace };
   }
 
   function buildStrollerWheel(radius) {
@@ -2173,7 +2183,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261021-stroller-wheels1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261021-no-face1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2321,9 +2331,10 @@
       if(!spz.ok) throw new Error('Stroller '+spz.status);
       s=extractStroller(SPZ.parse(await SPZ.gunzip(await spz.arrayBuffer())));
     } else s=await loadPackedCloud(res[4].stroller);
-    stroller = prepareStroller(s);
+    stroller = prepareStroller(s, !customSource);
     window.__stats.stroller = { scanPoints: s.size.length, bodyPoints: stroller.gpu.n,
       wheelPoints: stroller.wheels.reduce(function (n, wheel) { return n + wheel.gpu.n * 2; }, 0),
+      facePointsRemoved: stroller.removedFace,
       length: +s.length.toFixed(2), width: +s.width.toFixed(2) };
 
     buildPigeons();
