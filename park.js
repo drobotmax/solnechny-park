@@ -724,9 +724,9 @@
         cl.add(x1+(x2-x1)*t, y1+(y2-y1)*t, z1+(z2-z1)*t, [116, 43, 51], .05, false);
       }
     }
-    var sideX = 3 / Math.hypot(2.5, 3), sideZ = -2.5 / Math.hypot(2.5, 3);
+    var sideX = 1 / Math.hypot(2.5, 1), sideZ = 2.5 / Math.hypot(2.5, 1);
     for (var rack = 0; rack < 11; rack++) {
-      var cx = 43 - 2.5 * rack, cz = -370 - 3 * rack;
+      var cx = 43 - 2.5 * rack, cz = -395 + rack;
       var lx = cx - sideX * .67, lz = cz - sideZ * .67;
       var rx = cx + sideX * .67, rz = cz + sideZ * .67;
       rackLine(lx, .05, lz, lx, .66, lz);
@@ -2063,7 +2063,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261021-plaza-cafe2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261021-plaza-cafe3').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2084,8 +2084,10 @@
       return !park.scans.some(function (scan) { return Math.hypot(tree[0] - scan.at[0], tree[1] - scan.at[1]) < 9; }) &&
              !oakSites.some(function (oak) { return Math.hypot(tree[0] - oak.at[0], tree[1] - oak.at[1]) < 7.5; });
     });
+    var stageFootprint=meshEntries.find(function(e){return e.kind==='plazaStage';}).pts;
     park.props = park.props.filter(function (prop) {
-      return !park.scans.some(function (scan) { return inside(scan.footprint, prop[1], prop[2]); });
+      return !inside(stageFootprint,prop[1],prop[2]) &&
+             !park.scans.some(function (scan) { return inside(scan.footprint, prop[1], prop[2]); });
     });
     var cv = document.createElement('canvas'); cv.width = park.w; cv.height = park.h;
     var cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(res[1], 0, 0);
@@ -2100,6 +2102,12 @@
         if (ix >= 0 && iz >= 0 && ix < park.w && iz < park.h) cats[iz * park.w + ix] = FENCE | IN_PARK;
       }
     });
+    var stageBox=bbox(stageFootprint);
+    for (var z=stageBox[1]; z<=stageBox[3]; z+=park.mpp) for (var x=stageBox[0]; x<=stageBox[2]; x+=park.mpp) {
+      if (!inside(stageFootprint,x,z)) continue;
+      var ix=Math.floor((x-park.x0)/park.mpp), iz=Math.floor((z-park.z0)/park.mpp);
+      if (ix>=0 && iz>=0 && ix<park.w && iz<park.h) cats[iz*park.w+ix]=BUILDING|IN_PARK;
+    }
     groundTex = texture(0, gl.R8, gl.RED, park.w, park.h, cats);
     albedoTex = texture(1, gl.RGB8, gl.RGB, 0, 0, null, res[2]);
     rgba=null; cv.width=cv.height=1; res[1]=res[2]=null;

@@ -2,13 +2,17 @@
 (function(root){
 'use strict';
 const buildingIds=[3,5,6,7,49,50,81], rideIds=[0,1,2,6,9,17,25,26,27,36];
+// Placed and scaled to the stage rectangle marked in the user's plaza screenshot.
+const plazaStageFootprint=[[41.93,-391.74],[36.53,-381.06],[42.08,-378.26],[47.48,-388.94]];
 const C={cream:[.80,.75,.63],trim:[.92,.89,.80],roof:[.28,.20,.16],glass:[.18,.30,.33],red:[.68,.12,.10],steel:[.57,.60,.58],gold:[.73,.53,.20],dark:[.12,.15,.15]};
 function center(p){return p.reduce((a,b)=>[a[0]+b[0]/p.length,a[1]+b[1]/p.length],[0,0]);}
 function entries(park){
- return buildingIds.map(i=>{const b=park.buildings[i],c=center(b.pts);return {id:'b'+i,cx:c[0],cz:c[1],kind:i===7?'plazaStage':i===81?'bikeCafe':'building',pts:b.pts,h:b.h,style:'cafe'};})
+ const stageCenter=center(plazaStageFootprint);
+ return buildingIds.map(i=>{const b=park.buildings[i],c=center(b.pts);return {id:'b'+i,cx:c[0],cz:c[1],kind:i===7?'bikeCafe':'building',pts:b.pts,h:i===81?8:b.h,style:i===81?'colonnade':'cafe'};})
  .concat(rideIds.map(i=>{const r=park.rides[i],c=center(r.pts);
   const kind=i===1?'coaster':i===36?'carousel':i===0||i===2?'bumper':i===17?'train':i===26?'swingTower':i===27?'pendulum':'spinner';
-  return {id:'r'+i,cx:c[0],cz:c[1],kind,pts:r.pts};}));
+  return {id:'r'+i,cx:c[0],cz:c[1],kind,pts:r.pts};}))
+ .concat([{id:'plaza-stage',cx:stageCenter[0],cz:stageCenter[1],kind:'plazaStage',pts:plazaStageFootprint}]);
 }
 function Geometry(){this.data=[];}
 Geometry.prototype.tri=function(a,b,c,color,mat){
@@ -78,10 +82,10 @@ function footprintPoint(p,u,v,y){
  return [front[0]*(1-v)+back[0]*v,y,front[1]*(1-v)+back[1]*v];
 }
 function bikeCafe(g,e){
- const p=e.pts,at=(u,v,y)=>footprintPoint(p,u,v,y),wall=[.42,.34,.26],wood=[.25,.20,.17],roof=[.16,.17,.17],slate=[.22,.23,.23];
+ const p=[e.pts[1],e.pts[2],e.pts[3],e.pts[0]],at=(u,v,y)=>footprintPoint(p,u,v,y),wall=[.42,.34,.26],wood=[.25,.20,.17],roof=[.16,.17,.17],slate=[.22,.23,.23];
  for(const [u0,v0,u1,v1] of [[0,0,1,0],[1,0,1,1],[1,1,0,1],[0,1,0,0]])
   g.quad(at(u0,v0,0),at(u1,v1,0),at(u1,v1,3.35),at(u0,v0,3.35),wall,1);
- // The west-facing gable is perpendicular to the bridge approach.
+ // The long service frontage faces the bridge approach.
  for(const v of [0,1])g.tri(at(0,v,3.35),at(.5,v,6.1),at(1,v,3.35),wood,1);
  g.quad(at(-.055,-.045,3.35),at(.5,-.045,6.35),at(.5,1.045,6.35),at(-.055,1.045,3.35),roof,4);
  g.quad(at(.5,-.045,6.35),at(1.055,-.045,3.35),at(1.055,1.045,3.35),at(.5,1.045,6.35),slate,4);

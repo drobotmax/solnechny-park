@@ -14,10 +14,19 @@ test('detailed landmarks contain finite nondegenerate triangles, unit normals an
  }
  assert(total*40<5*1024*1024,'mesh payload must stay below 5 MiB');
 });
-test('replacement models retain existing footprint locations and unique IDs',()=>{
+test('mapped models retain their footprints; plaza stage uses the corrected smaller placement',()=>{
  const models=entries(park);assert.equal(new Set(models.map(e=>e.id)).size,models.length);
- for(const e of models){const source=e.id[0]==='b'?park.buildings[+e.id.slice(1)]:park.rides[+e.id.slice(1)];assert.deepEqual(e.pts,source.pts);}
- assert.equal(models.length,buildingIds.length+rideIds.length);
+ for(const e of models.filter(e=>e.id[0]==='b'||e.id[0]==='r')){
+  const source=e.id[0]==='b'?park.buildings[+e.id.slice(1)]:park.rides[+e.id.slice(1)];
+  assert.deepEqual(e.pts,source.pts);
+ }
+ const cafe=models.find(e=>e.kind==='bikeCafe'),stage=models.find(e=>e.kind==='plazaStage');
+ assert.equal(cafe.id,'b7');
+ assert.equal(stage.id,'plaza-stage');
+ assert(stage.cx<cafe.cx);
+ const depth=p=>Math.hypot(p[3][0]-p[0][0],p[3][1]-p[0][1]);
+ assert(depth(stage.pts)<depth(cafe.pts)*.3);
+ assert.equal(models.length,buildingIds.length+rideIds.length+1);
 });
 test('geometry is deterministic across eviction and regeneration',()=>{
  for(const e of entries(park))assert.deepEqual(build(e).data,build(e).data);

@@ -27,7 +27,8 @@ function writeCloud(c){
  fs.writeFileSync(path.join(out,file),packed);return {src:'park/stream/'+file,n,bytes:buf.length,downloadBytes:packed.length};
 }
 ctx.cloudVAO=(pos,col,size)=>({pos,col,size,n:size.length});
-park.props=park.props.filter(p=>!scans.some(s=>ctx.inside(s.footprint,p[1],p[2])));
+const stageFootprint=ctx.ParkMeshes.entries(park).find(e=>e.kind==='plazaStage').pts;
+park.props=park.props.filter(p=>!ctx.inside(stageFootprint,p[1],p[2])&&!scans.some(s=>ctx.inside(s.footprint,p[1],p[2])));
 const world=ctx.buildWorld(park);
 const chunks=world.chunks.map((c,i)=>Object.assign({id:String(i),cx:c.cx,cz:c.cz},writeCloud(c)));
 const raw=ctx.window.SPZ.parse(new Uint8Array(zlib.gunzipSync(fs.readFileSync('karasunsky.spz'))));
