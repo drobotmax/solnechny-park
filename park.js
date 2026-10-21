@@ -1684,7 +1684,7 @@
       else if (d.kind === 'pigeon') gpu = pigeonGPU;
       else if (d.kind === 'gull') gpu = gullGPU;
       else if (d.kind === 'small') gpu = smallGPU[bird.species].body;
-      else gpu = forestGPU[bird.species === 'woodpecker' ? 1 : bird.species === 'crow' ? 2 : d.species === 'spottedWoodpecker' ? 3 : d.species === 'jay' ? 4 : 0];
+      else gpu = forestGPU[bird.species === 'woodpecker' ? 1 : bird.species === 'crow' ? 2 : bird.species === 'spottedWoodpecker' ? 3 : bird.species === 'jay' ? 4 : 0];
       var y = d.dead ? 0.025 : (d.kind === 'gull' ? 0.13 : 0.01) + Math.abs(Math.sin(d.phase)) * 0.035;
       var base = yawMat(d.heading, d.x, y, d.z);
       if (d.dead) base = mat4mul(base, [1.2, 0, 0, 0, 0, 0.16, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
