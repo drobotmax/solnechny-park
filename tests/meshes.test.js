@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {entries,build,buildingIds,rideIds,landingZone}=require('../park-meshes.js');
+const {entries,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec}=require('../park-meshes.js');
 const park=require('../park/park.json');
 test('detailed landmarks contain finite nondegenerate triangles, unit normals and bounded geometry',()=>{
  let total=0;
@@ -54,4 +54,15 @@ test('bridge landing keeps the road clear between two striped walks and planted 
 });
 test('geometry is deterministic across eviction and regeneration',()=>{
  for(const e of entries(park))assert.deepEqual(build(e).data,build(e).data);
+});
+test('bridge height joins the level approaches and descends toward the square',()=>{
+ const {anchor,direction,cityS,parkS,deckHeight}=terrainSpec;
+ const at=(s,l=0)=>[anchor[0]+direction[0]*s+direction[1]*l,anchor[1]+direction[1]*s-direction[0]*l];
+ assert.equal(terrainHeight(...at(cityS)),0);
+ assert(Math.abs(terrainHeight(...at(-30))-deckHeight)<1e-6);
+ assert.equal(terrainHeight(...at(parkS)),0);
+ assert.equal(terrainHeight(...at(12,24)),0);
+ let prev=deckHeight;
+ for(let s=0;s<=parkS;s+=.25){const h=terrainHeight(...at(s));assert(h<=prev+1e-9);prev=h;}
+ assert(terrainHeight(...at(0))>terrainHeight(...at(parkS/2)));
 });

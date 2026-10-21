@@ -159,17 +159,31 @@
   var GROUND_VS = '#version 300 es\n' +
     'layout(location = 0) in vec2 aXZ;\n' +
     'uniform mat4 uView, uProj;\n' +
+    'uniform vec4 uRampFrame, uRampShape;\n' +
+    'uniform int uRampPass;\n' +
     'out vec2 vXZ;\n' +
     'out float vDist;\n' +
+    'out float vRampHeight;\n' +
+    'float ease(float t){t=clamp(t,0.,1.);return t*t*(3.-2.*t);}\n' +
     'void main() {\n' +
-    '  vec4 v = uView * vec4(aXZ.x, 0.0, aXZ.y, 1.0);\n' +
+    '  float height=0.;\n' +
+    '  if(uRampPass==1){\n' +
+    '    vec2 delta=aXZ-uRampFrame.xy;\n' +
+    '    float s=dot(delta,uRampFrame.zw),l=abs(delta.x*uRampFrame.w-delta.y*uRampFrame.z);\n' +
+    '    float widening=ease((s+8.)/10.),core=7.5+8.5*widening,outer=9.5+12.5*widening;\n' +
+    '    height=uRampShape.z*min(ease((s-uRampShape.x)/14.),1.-ease(s/uRampShape.y))*(1.-ease((l-core)/(outer-core)));\n' +
+    '  }\n' +
+    '  vec4 v = uView * vec4(aXZ.x, height+float(uRampPass)*0.012, aXZ.y, 1.0);\n' +
     '  gl_Position = uProj * v;\n' +
-    '  vXZ = aXZ; vDist = -v.z;\n' +
+    '  vXZ = aXZ; vDist = -v.z; vRampHeight=height;\n' +
     '}\n';
   var GROUND_FS = `#version 300 es
     precision highp float;
+    precision highp int;
     in vec2 vXZ;
     in float vDist;
+    in float vRampHeight;
+    uniform int uRampPass;
     uniform sampler2D uGround,uAlbedo;
     uniform vec4 uContact[16],uFrame;
     uniform int uContactN;
@@ -180,6 +194,7 @@
     int category(vec2 uv){return int(texture(uGround,uv).r*255.+.5)&31;}
     bool paved(int c){return c==2||c==3||c==9||c==11;}
     void main(){
+      if(uRampPass==1&&vRampHeight<.002)discard;
       vec2 uv=(vXZ-uFrame.xy)/uFrame.zw;
       int cat=category(uv);
       vec3 sat=pow(texture(uAlbedo,uv).rgb,vec3(.8))*1.2;
@@ -294,7 +309,7 @@
     return u;
   }
   var P = program(PTS_VS, PTS_FS, ['uModel', 'uFocal', 'uMaxPt', 'uAnim', 'uInstanced', 'uDensity']);
-  var G = program(GROUND_VS, GROUND_FS, ['uGround', 'uAlbedo', 'uFrame', 'uContact', 'uContactN']);
+  var G = program(GROUND_VS, GROUND_FS, ['uGround', 'uAlbedo', 'uFrame', 'uContact', 'uContactN', 'uRampFrame', 'uRampShape', 'uRampPass']);
   var M = program(MESH_VS, MESH_FS, ['uEye']);
   var meshes=null, meshContacts=null;
 
@@ -307,7 +322,7 @@
   ChunkedCloud.prototype.add = function (x, y, z, c, s, emissive) {
     var k = Math.floor(x / CHUNK) + ',' + Math.floor(z / CHUNK), ch = this.chunks.get(k);
     if (!ch) { ch = new Cloud(); ch.cx = (Math.floor(x / CHUNK) + 0.5) * CHUNK; ch.cz = (Math.floor(z / CHUNK) + 0.5) * CHUNK; this.chunks.set(k, ch); }
-    ch.add(x, y, z, c, s, emissive);
+    ch.add(x, y + ParkMeshes.terrainHeight(x,z), z, c, s, emissive);
   };
   ChunkedCloud.prototype.upload = function () {
     var out = [], n = 0;
@@ -904,7 +919,7 @@
     return false;
   }
 
-  var park = null, cats = null, groundTex = null, albedoTex = null, groundVAO = null, world = null, stroller = null;
+  var park = null, cats = null, groundTex = null, albedoTex = null, groundVAO = null, rampVAO = null, rampVertexCount = 0, world = null, stroller = null;
   var ferris = null, jets = null, bottleGPU = null;
   var capturedScans = [];
   var gulls = { birds: [] }, gullGPU = null, gullWingGPU = null, nextGullCry = 0;
@@ -1221,6 +1236,11 @@
       var drag = surf[1] + 0.04 * car.v * car.v;
       car.v = car.v > 0 ? Math.max(0, car.v - drag * dt) : Math.min(0, car.v + drag * dt);
     }
+    if (!(fwd && back) && (fwd || back || Math.abs(car.v) > 0.05)) {
+      var hx = Math.sin(car.heading) * 0.5, hz = -Math.cos(car.heading) * 0.5;
+      var grade = ParkMeshes.terrainHeight(car.x + hx, car.z + hz) - ParkMeshes.terrainHeight(car.x - hx, car.z - hz);
+      car.v = Math.max(-REVERSE * state.speedMul, Math.min(top, car.v - 6 * grade * dt));
+    }
 
     var sp = Math.abs(car.v);
     var rate = TURN_PIVOT + (TURN_MAX - TURN_PIVOT) * Math.min(1, sp / 1.5);
@@ -1513,13 +1533,18 @@
     var time = (now - t0) / 1000;
     var sp = Math.abs(car.v);
     var bob = sp > 0.1 ? 0.012 * Math.sin(car.odo * 9) : 0;
-    var model = yawMat(car.heading, car.x, bob, car.z);   // local -z (the front) along the heading
+    var groundY = ParkMeshes.terrainHeight(car.x, car.z);
+    var fx = Math.sin(car.heading), fz = -Math.cos(car.heading);
+    var rise = ParkMeshes.terrainHeight(car.x + fx * 0.6, car.z + fz * 0.6) -
+      ParkMeshes.terrainHeight(car.x - fx * 0.6, car.z - fz * 0.6);
+    var tilt = Math.atan2(rise, 1.2), ct = Math.cos(tilt), st = Math.sin(tilt);
+    var model = mat4mul(yawMat(car.heading, car.x, groundY + bob, car.z),
+      [1, 0, 0, 0, 0, ct, st, 0, 0, -st, ct, 0, 0, 0, 0, 1]);
 
     var yaw = cam.yaw + cam.orbit, pitch = cam.top ? 1.2 : cam.pitch;
     var dist = cam.top ? Math.max(cam.dist * 8, 45) : cam.dist + Math.min(sp, 8) * 0.18;
-    var fx = Math.sin(car.heading), fz = -Math.cos(car.heading);
     var look = cam.top ? 0 : Math.min(sp, 8) * 0.25;
-    var tgt = [car.x + fx * look, 0.6, car.z + fz * look];
+    var tgt = [car.x + fx * look, groundY + 0.6, car.z + fz * look];
     var cfx = Math.sin(yaw), cfz = -Math.cos(yaw), cp = Math.cos(pitch);
     var sh = cam.shake;
     var eye = [tgt[0] - cfx * dist * cp + (Math.random() - 0.5) * sh, Math.max(0.3, tgt[1] + dist * Math.sin(pitch)) + (Math.random() - 0.5) * sh, tgt[2] - cfz * dist * cp];
@@ -1545,8 +1570,15 @@
     gl.uniform1f(G.uFogNear, fogNear); gl.uniform1f(G.uFogFar, fogFar);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, groundTex); gl.uniform1i(G.uGround, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, albedoTex); gl.uniform1i(G.uAlbedo, 1);
+    var slope=ParkMeshes.terrainSpec;
+    gl.uniform4f(G.uRampFrame,slope.anchor[0],slope.anchor[1],slope.direction[0],slope.direction[1]);
+    gl.uniform4f(G.uRampShape,slope.cityS,slope.parkS,slope.deckHeight,0);
+    gl.uniform1i(G.uRampPass,0);
     gl.bindVertexArray(groundVAO);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.uniform1i(G.uRampPass,1);
+    gl.bindVertexArray(rampVAO);
+    gl.drawArrays(gl.TRIANGLES,0,rampVertexCount);
 
     meshes.update(eye[0],eye[2],fogFar+96);
     gl.useProgram(M.prog);colorUniforms(M);
@@ -1850,7 +1882,7 @@
     fpsFrames++;
     if (!fpsSince) fpsSince = now;
     if (now - fpsSince >= 1000) { window.__stats.fps = Math.round(fpsFrames * 1000 / (now - fpsSince)); fpsFrames = 0; fpsSince = now; }
-    window.__stats.car = { x: +car.x.toFixed(2), z: +car.z.toFixed(2), heading: +car.heading.toFixed(3), v: +car.v.toFixed(2), cat: catAt(car.x, car.z) };
+    window.__stats.car = { x: +car.x.toFixed(2), y: +ParkMeshes.terrainHeight(car.x,car.z).toFixed(2), z: +car.z.toFixed(2), heading: +car.heading.toFixed(3), v: +car.v.toFixed(2), cat: catAt(car.x, car.z) };
     window.__stats.game = { mode: game.mode, milk: +game.milk.toFixed(1), found: game.found, bottles: game.bottles.length };
     if (debugEl && now - debugAt > 1000) {
       debugAt = now;
@@ -2066,7 +2098,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261021-bridge-entrance1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261021-bridge-slope1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2140,6 +2172,25 @@
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([X0, Z0, X1, Z0, X1, Z1, X0, Z0, X1, Z1, X0, Z1]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.bindVertexArray(null);
+
+    var slope=ParkMeshes.terrainSpec,strip=[],segments=64,lanes=24;
+    function rampPoint(s,l){return [slope.anchor[0]+slope.direction[0]*s+slope.direction[1]*l,
+      slope.anchor[1]+slope.direction[1]*s-slope.direction[0]*l];}
+    for(var si=0;si<segments;si++)for(var li=0;li<lanes;li++){
+      var s0=slope.cityS+(slope.parkS-slope.cityS)*si/segments;
+      var s1=slope.cityS+(slope.parkS-slope.cityS)*(si+1)/segments;
+      var l0=-23+46*li/lanes,l1=-23+46*(li+1)/lanes;
+      var a=rampPoint(s0,l0),b=rampPoint(s1,l0),c=rampPoint(s1,l1),d=rampPoint(s0,l1);
+      strip.push(...a,...b,...c,...a,...c,...d);
+    }
+    rampVertexCount=strip.length/2;
+    rampVAO=gl.createVertexArray();
+    gl.bindVertexArray(rampVAO);
+    gl.bindBuffer(gl.ARRAY_BUFFER,gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(strip),gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
     gl.bindVertexArray(null);
 
     statusEl.textContent = 'Загрузка ближайших участков…';

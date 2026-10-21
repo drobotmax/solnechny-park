@@ -271,7 +271,11 @@ The entrance road and the mapped pedestrian square use asphalt in the surface ma
 the bridge sidewalks retain their separate paving. The first filmed section of the
 western alley is widened and surfaced as asphalt. Two light trusses and the raised
 planting edge now follow the alley centerline instead of an unrelated straight line.
-Their dimensions remain approximate because the footage is not a measured survey.
+The entrance bridge reaches an approximately 2 m deck height, then descends smoothly
+over roughly 27 m into the square. Its sidewalks, planted edges, stroller, camera,
+and uphill/downhill motion follow the same height profile. This elevation is an
+illustrative estimate from the supplied photos, not a surveyed measurement. Other
+dimensions remain approximate because the footage is not a measured survey.
 
 ### Plaza stage and bicycle cafe
 

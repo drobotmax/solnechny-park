@@ -5,6 +5,21 @@ const buildingIds=[3,5,6,7,49,50,81], rideIds=[0,1,2,6,9,17,25,26,27,36];
 // Placed and scaled to the stage rectangle marked in the user's plaza screenshot.
 const plazaStageFootprint=[[49.93,-379.74],[44.53,-369.06],[50.08,-366.26],[55.48,-376.94]];
 const bridgeLandingAxis=[[7.87,-432.91],[13.3,-406.85]];
+const bridgeCityEnd=[-11.88,-527.76];
+const rampLength=Math.hypot(bridgeLandingAxis[1][0]-bridgeLandingAxis[0][0],bridgeLandingAxis[1][1]-bridgeLandingAxis[0][1]);
+const rampDirection=[(bridgeLandingAxis[1][0]-bridgeLandingAxis[0][0])/rampLength,(bridgeLandingAxis[1][1]-bridgeLandingAxis[0][1])/rampLength];
+const rampCityS=(bridgeCityEnd[0]-bridgeLandingAxis[0][0])*rampDirection[0]+(bridgeCityEnd[1]-bridgeLandingAxis[0][1])*rampDirection[1];
+const terrainSpec={anchor:bridgeLandingAxis[0],direction:rampDirection,cityS:rampCityS,parkS:rampLength,deckHeight:2};
+function smooth01(t){t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);}
+function terrainHeight(x,z){
+ const s=(x-terrainSpec.anchor[0])*rampDirection[0]+(z-terrainSpec.anchor[1])*rampDirection[1];
+ if(s<=rampCityS||s>=rampLength)return 0;
+ const l=Math.abs((x-terrainSpec.anchor[0])*rampDirection[1]-(z-terrainSpec.anchor[1])*rampDirection[0]);
+ const widening=smooth01((s+8)/10),core=7.5+8.5*widening,outer=9.5+12.5*widening;
+ const lateral=1-smooth01((l-core)/(outer-core));
+ const city=smooth01((s-rampCityS)/14),park=1-smooth01(s/rampLength);
+ return terrainSpec.deckHeight*Math.min(city,park)*lateral;
+}
 function landingZone(x,z){
  const a=bridgeLandingAxis[0],b=bridgeLandingAxis[1],length=Math.hypot(b[0]-a[0],b[1]-a[1]);
  const dx=(b[0]-a[0])/length,dz=(b[1]-a[1])/length;
@@ -190,11 +205,14 @@ function tutCoffee(g,e){
 function bridgeLanding(g){
  const a=bridgeLandingAxis[0],b=bridgeLandingAxis[1],length=Math.hypot(b[0]-a[0],b[1]-a[1]);
  const dx=(b[0]-a[0])/length,dz=(b[1]-a[1])/length;
- const at=(s,l,y)=>[a[0]+dx*s+dz*l,y,a[1]+dz*s-dx*l];
+ const at=(s,l,y)=>{const x=a[0]+dx*s+dz*l,z=a[1]+dz*s-dx*l;return [x,y+terrainHeight(x,z),z];};
  const half=s=>3.2+.12*s,hash=(s,t,side)=>{const n=Math.sin(s*78.233+t*19.19+side*31.71)*43758.5453;return n-Math.floor(n);};
  // The bars cross only the two pedestrian shoulders, leaving the centre lane open.
- for(const side of [-1,1])g.quad(at(0,side*half(0),.025),at(25,side*half(25),.025),
-  at(25,side*(half(25)+4.05),.025),at(0,side*(half(0)+4.05),.025),[.34,.34,.33],1);
+ for(const side of [-1,1])for(let s=0;s<25;s+=2){
+  const e=Math.min(s+2,25);
+  g.quad(at(s,side*half(s),.025),at(e,side*half(e),.025),
+   at(e,side*(half(e)+4.05),.025),at(s,side*(half(s)+4.05),.025),[.34,.34,.33],1);
+ }
  for(const side of [-1,1])for(let s=1.3;s<25;s+=1.65){
   const inner=side*(half(s)+.12),outer=side*(half(s)+4.05);
   g.quad(at(s,inner,.055),at(s+.68,inner,.055),at(s+.68,outer,.055),at(s,outer,.055),[.84,.84,.81],1);
@@ -202,12 +220,15 @@ function bridgeLanding(g){
  for(const side of [-1,1]){
   const inner=s=>half(s)+4.45,outer=s=>half(s)+(side>0?13-.08*s:12-.05*s);
   const soil=side>0?[.35,.32,.27]:[.31,.31,.24];
-  g.quad(at(1.5,side*inner(1.5),.22),at(23.5,side*inner(23.5),.22),
-   at(23.5,side*outer(23.5),.7),at(1.5,side*outer(1.5),.7),soil,1);
-  g.quad(at(1.5,side*inner(1.5),0),at(23.5,side*inner(23.5),0),
-   at(23.5,side*inner(23.5),.22),at(1.5,side*inner(1.5),.22),[.48,.46,.40],1);
-  g.quad(at(23.5,side*outer(23.5),0),at(1.5,side*outer(1.5),0),
-   at(1.5,side*outer(1.5),.7),at(23.5,side*outer(23.5),.7),[.44,.43,.38],1);
+  for(let s=1.5;s<23.5;s+=2){
+   const e=Math.min(s+2,23.5);
+   g.quad(at(s,side*inner(s),.22),at(e,side*inner(e),.22),
+    at(e,side*outer(e),.7),at(s,side*outer(s),.7),soil,1);
+   g.quad(at(s,side*inner(s),0),at(e,side*inner(e),0),
+    at(e,side*inner(e),.22),at(s,side*inner(s),.22),[.48,.46,.40],1);
+   g.quad(at(e,side*outer(e),0),at(s,side*outer(s),0),
+    at(s,side*outer(s),.7),at(e,side*outer(e),.7),[.44,.43,.38],1);
+  }
   for(let s=1.5;s<23.5;s+=.8){
    const e=Math.min(s+.8,23.5),in0=side*inner(s),in1=side*inner(e),out0=side*outer(s),out1=side*outer(e);
    g.beam(at(s,in0,.20),at(e,in1,.20),.16,[.51,.49,.43],2,5);
@@ -411,6 +432,6 @@ function build(e){
  for(let i=0;i<data.length;i+=10)radius=Math.max(radius,Math.hypot(data[i]-e.cx,data[i+1]-5,data[i+2]-e.cz));
  return {data,n:data.length/10,center:[e.cx,5,e.cz],radius};
 }
-const api={entries,build,buildingIds,rideIds,landingZone};
+const api={entries,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkMeshes=api;
 })(typeof window!=='undefined'?window:globalThis);
