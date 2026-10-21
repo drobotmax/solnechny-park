@@ -716,6 +716,25 @@
         }
       }
     });
+    // Red inverted-U bicycle stands mark the cafe side of the asphalt forecourt.
+    function rackLine(x1, y1, z1, x2, y2, z2) {
+      var steps = Math.max(1, Math.ceil(Math.hypot(x2-x1, y2-y1, z2-z1) / .07));
+      for (var i = 0; i <= steps; i++) {
+        var t = i / steps;
+        cl.add(x1+(x2-x1)*t, y1+(y2-y1)*t, z1+(z2-z1)*t, [116, 43, 51], .05, false);
+      }
+    }
+    var sideX = 3 / Math.hypot(2.5, 3), sideZ = -2.5 / Math.hypot(2.5, 3);
+    for (var rack = 0; rack < 11; rack++) {
+      var cx = 43 - 2.5 * rack, cz = -370 - 3 * rack;
+      var lx = cx - sideX * .67, lz = cz - sideZ * .67;
+      var rx = cx + sideX * .67, rz = cz + sideZ * .67;
+      rackLine(lx, .05, lz, lx, .66, lz);
+      rackLine(lx, .66, lz, lx + sideX * .13, .85, lz + sideZ * .13);
+      rackLine(lx + sideX * .13, .85, lz + sideZ * .13, rx - sideX * .13, .85, rz - sideZ * .13);
+      rackLine(rx - sideX * .13, .85, rz - sideZ * .13, rx, .66, rz);
+      rackLine(rx, .66, rz, rx, .05, rz);
+    }
   }
 
   function bbox(p) {
@@ -2044,7 +2063,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261020-approach2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261021-plaza-cafe1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);

@@ -5,7 +5,7 @@ const buildingIds=[3,5,6,7,49,50,81], rideIds=[0,1,2,6,9,17,25,26,27,36];
 const C={cream:[.80,.75,.63],trim:[.92,.89,.80],roof:[.28,.20,.16],glass:[.18,.30,.33],red:[.68,.12,.10],steel:[.57,.60,.58],gold:[.73,.53,.20],dark:[.12,.15,.15]};
 function center(p){return p.reduce((a,b)=>[a[0]+b[0]/p.length,a[1]+b[1]/p.length],[0,0]);}
 function entries(park){
- return buildingIds.map(i=>{const b=park.buildings[i],c=center(b.pts);return {id:'b'+i,cx:c[0],cz:c[1],kind:'building',pts:b.pts,h:i===81?8:b.h,style:i===81?'colonnade':'cafe'};})
+ return buildingIds.map(i=>{const b=park.buildings[i],c=center(b.pts);return {id:'b'+i,cx:c[0],cz:c[1],kind:i===7?'plazaStage':i===81?'bikeCafe':'building',pts:b.pts,h:b.h,style:'cafe'};})
  .concat(rideIds.map(i=>{const r=park.rides[i],c=center(r.pts);
   const kind=i===1?'coaster':i===36?'carousel':i===0||i===2?'bumper':i===17?'train':i===26?'swingTower':i===27?'pendulum':'spinner';
   return {id:'r'+i,cx:c[0],cz:c[1],kind,pts:r.pts};}));
@@ -70,6 +70,68 @@ function building(g,e){
   }
   if(e.style==='colonnade')g.tri([a[0],h,a[1]],[c[0],h,c[1]],[b[0],h,b[1]],C.roof,4);
  }
+}
+// Four mapped corners keep both structures aligned with their real footprints.
+function footprintPoint(p,u,v,y){
+ const front=[p[0][0]*(1-u)+p[1][0]*u,p[0][1]*(1-u)+p[1][1]*u];
+ const back=[p[3][0]*(1-u)+p[2][0]*u,p[3][1]*(1-u)+p[2][1]*u];
+ return [front[0]*(1-v)+back[0]*v,y,front[1]*(1-v)+back[1]*v];
+}
+function bikeCafe(g,e){
+ const p=[e.pts[1],e.pts[2],e.pts[3],e.pts[0]],at=(u,v,y)=>footprintPoint(p,u,v,y),wall=[.42,.34,.26],wood=[.25,.20,.17],roof=[.16,.17,.17],slate=[.22,.23,.23];
+ for(const [u0,v0,u1,v1] of [[0,0,1,0],[1,0,1,1],[1,1,0,1],[0,1,0,0]])
+  g.quad(at(u0,v0,0),at(u1,v1,0),at(u1,v1,3.35),at(u0,v0,3.35),wall,1);
+ // The south-facing gable and deep dark roof are prominent from the plaza.
+ for(const v of [0,1])g.tri(at(0,v,3.35),at(.5,v,6.1),at(1,v,3.35),wood,1);
+ g.quad(at(-.055,-.045,3.35),at(.5,-.045,6.35),at(.5,1.045,6.35),at(-.055,1.045,3.35),roof,4);
+ g.quad(at(.5,-.045,6.35),at(1.055,-.045,3.35),at(1.055,1.045,3.35),at(.5,1.045,6.35),slate,4);
+ for(const v of [-.045,1.045])for(const u of [-.055,.5,1.055]){
+  const y=u===.5?6.35:3.35;
+  g.beam(at(u,v,y),at(u,v===-.045?1.045:-.045,y),.07,C.dark,2,4);
+ }
+ const front=(u,y)=>at(u,-.012,y);
+ // Service windows, an open-looking doorway and a modest bicycle sign.
+ for(const [u0,u1] of [[.08,.34],[.66,.94]]){
+  g.quad(front(u0,1.05),front(u1,1.05),front(u1,2.72),front(u0,2.72),C.glass,3);
+  for(const u of [u0,u1])g.beam(front(u,1.05),front(u,2.72),.055,C.trim,2,4);
+  g.beam(front(u0,2.72),front(u1,2.72),.07,C.trim,2,4);
+  g.beam(front((u0+u1)/2,1.05),front((u0+u1)/2,2.72),.035,C.trim,2,4);
+ }
+ g.quad(front(.405,.08),front(.595,.08),front(.595,2.95),front(.405,2.95),wood,1);
+ g.beam(front(.405,2.95),front(.595,2.95),.09,C.trim,2,4);
+ g.beam(front(.09,3.05),front(.36,3.05),.12,C.dark,2,4);
+ for(const u of [.15,.28])for(let i=0;i<12;i++){
+  const a=i*Math.PI/6,b=(i+1)*Math.PI/6;
+  g.beam(front(u+Math.cos(a)*.047,2.58+Math.sin(a)*.20),front(u+Math.cos(b)*.047,2.58+Math.sin(b)*.20),.018,C.trim,2,4);
+ }
+ g.beam(front(.15,2.58),front(.215,2.77),.018,C.trim,2,4);
+ g.beam(front(.215,2.77),front(.28,2.58),.018,C.trim,2,4);
+}
+function plazaStage(g,e){
+ const p=[e.pts[1],e.pts[2],e.pts[3],e.pts[0]];
+ const at=(u,v,y)=>footprintPoint(p,u,v,y),fascia=[.57,.60,.30],red=[.55,.12,.10];
+ g.quad(at(0,0,1.05),at(1,0,1.05),at(1,1,1.05),at(0,1,1.05),C.dark,1);
+ for(const [u0,v0,u1,v1] of [[0,0,1,0],[1,0,1,1],[1,1,0,1],[0,1,0,0]])
+  g.quad(at(u0,v0,.08),at(u1,v1,.08),at(u1,v1,1.05),at(u0,v0,1.05),fascia,1);
+ // Red backdrop and pale lower banner sit behind an open arched canopy.
+ g.quad(at(.07,.85,1.08),at(.93,.85,1.08),at(.93,.85,5.25),at(.07,.85,5.25),red,1);
+ g.quad(at(.07,.846,1.14),at(.93,.846,1.14),at(.93,.846,1.85),at(.07,.846,1.85),fascia,1);
+ for(let i=0;i<12;i++){
+  const a=i*Math.PI/6;
+  g.beam(at(.28+Math.cos(a)*.07,.83,3.75+Math.sin(a)*.74),at(.28+Math.cos(a+.18)*.07,.83,3.75+Math.sin(a+.18)*.74),.035,C.gold,2,4);
+ }
+ for(const y of [4.15,3.72,3.28])g.beam(at(.43,.83,y),at(y===4.15?.79:.70,.83,y),.055,C.trim,2,4);
+ const arch=(u,v)=>at(u,v,1.08+6.65*Math.pow(Math.max(0,Math.sin(Math.PI*u)),.78));
+ for(const v of [-.06,.25,.55,.92]){
+  for(let i=0;i<32;i++)g.beam(arch(i/32,v),arch((i+1)/32,v),.11,C.dark,2,6);
+  for(const u of [0,1])g.beam(at(u,v,1.05),arch(u,v),.10,C.steel,2,6);
+ }
+ for(const u of [.08,.24,.5,.76,.92])g.beam(arch(u,-.06),arch(u,.92),.09,C.steel,2,6);
+ for(const u of [.12,.88])for(let i=0;i<7;i++){
+  const a=u+i*.018,b=a+.012;
+  g.quad(arch(a,-.04),arch(b,-.04),arch(b,.91),arch(a,.91),i%2?C.steel:C.trim,4);
+ }
+ g.quad(at(.965,.32,1.05),at(.965,.91,1.05),at(.965,.91,4.7),at(.965,.32,4.7),C.steel,1);
 }
 function bumper(g,e){
  const p=e.pts,c=[e.cx,e.cz],h=4.2;
@@ -205,7 +267,7 @@ function pendulum(g,e){
  }
 }
 function build(e){
- const g=new Geometry();({building,bumper,carousel,coaster,spinner,train,swingTower,pendulum}[e.kind])(g,e);
+ const g=new Geometry();({building,bikeCafe,plazaStage,bumper,carousel,coaster,spinner,train,swingTower,pendulum}[e.kind])(g,e);
  const data=new Float32Array(g.data);let radius=0;
  for(let i=0;i<data.length;i+=10)radius=Math.max(radius,Math.hypot(data[i]-e.cx,data[i+1]-5,data[i+2]-e.cz));
  return {data,n:data.length/10,center:[e.cx,5,e.cz],radius};
