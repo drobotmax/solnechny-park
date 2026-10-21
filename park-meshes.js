@@ -82,10 +82,10 @@ function footprintPoint(p,u,v,y){
  return [front[0]*(1-v)+back[0]*v,y,front[1]*(1-v)+back[1]*v];
 }
 function bikeCafe(g,e){
- const p=[e.pts[1],e.pts[2],e.pts[3],e.pts[0]],at=(u,v,y)=>footprintPoint(p,u,v,y),wall=[.58,.38,.26],wood=[.19,.18,.18],roof=[.16,.17,.17],slate=[.22,.23,.23];
+ // The mapped west edge faces the bridge landing and the open plaza.
+ const p=e.pts,at=(u,v,y)=>footprintPoint(p,u,v,y),wall=[.58,.38,.26],wood=[.19,.18,.18],roof=[.16,.17,.17],slate=[.22,.23,.23];
  for(const [u0,v0,u1,v1] of [[0,0,1,0],[1,0,1,1],[1,1,0,1],[0,1,0,0]])
   g.quad(at(u0,v0,0),at(u1,v1,0),at(u1,v1,3.35),at(u0,v0,3.35),wall,1);
- // The long service frontage faces the bridge approach.
  for(const v of [0,1])g.tri(at(0,v,3.35),at(.5,v,6.1),at(1,v,3.35),wood,1);
  g.quad(at(-.055,-.045,3.35),at(.5,-.045,6.35),at(.5,1.045,6.35),at(-.055,1.045,3.35),roof,4);
  g.quad(at(.5,-.045,6.35),at(1.055,-.045,3.35),at(1.055,1.045,3.35),at(.5,1.045,6.35),slate,4);
@@ -105,7 +105,16 @@ function bikeCafe(g,e){
   g.beam(front((u0+u1)/2,1.05),front((u0+u1)/2,2.72),.035,C.trim,2,4);
  }
  g.quad(front(.405,.08),front(.595,.08),front(.595,2.95),front(.405,2.95),wood,1);
- g.beam(front(.405,2.95),front(.595,2.95),.09,C.trim,2,4);
+ const door=(u,y)=>at(u,-.02,y);
+ for(const [u0,u1] of [[.425,.49],[.51,.575]]){
+  g.quad(door(u0,.85),door(u1,.85),door(u1,2.62),door(u0,2.62),C.glass,3);
+  for(const u of [u0,u1])g.beam(door(u,.12),door(u,2.85),.055,C.trim,2,4);
+  g.beam(door(u0,.85),door(u1,.85),.05,C.trim,2,4);
+  g.beam(door(u0,2.62),door(u1,2.62),.05,C.trim,2,4);
+ }
+ for(const u of [.405,.5,.595])g.beam(door(u,.08),door(u,2.95),.065,C.trim,2,4);
+ g.beam(door(.405,2.95),door(.595,2.95),.09,C.trim,2,4);
+ for(const u of [.485,.515])g.beam(door(u,1.1),door(u,1.45),.025,C.gold,2,4);
  g.beam(front(.09,3.05),front(.36,3.05),.12,C.dark,2,4);
  for(const u of [.15,.28])for(let i=0;i<12;i++){
   const a=i*Math.PI/6,b=(i+1)*Math.PI/6;
@@ -113,21 +122,22 @@ function bikeCafe(g,e){
  }
  g.beam(front(.15,2.58),front(.215,2.77),.018,C.trim,2,4);
  g.beam(front(.215,2.77),front(.28,2.58),.018,C.trim,2,4);
- // Ten parked bicycles stand outside the service frontage, leaving the door clear.
- const bikeSlots=[.07,.145,.22,.295,.63,.695,.76,.825,.89,.955];
- bikeSlots.forEach((u,i)=>{
-  const q=(du,y)=>at(u+du,-.19,y),frame=i%3===0?[.56,.16,.20]:i%3===1?[.20,.35,.45]:[.25,.28,.22];
-  for(const wheel of [-.026,.026])for(let k=0;k<12;k++){
+ // Two staggered rows fit ten parked bicycles on the shorter plaza frontage.
+ const bikeSlots=[[.10,-.075],[.23,-.075],[.77,-.075],[.90,-.075],
+  [.10,-.15],[.23,-.15],[.36,-.15],[.64,-.15],[.77,-.15],[.90,-.15]];
+ bikeSlots.forEach(([u,v],i)=>{
+  const q=(du,y)=>at(u+du,v,y),frame=i%3===0?[.56,.16,.20]:i%3===1?[.20,.35,.45]:[.25,.28,.22];
+  for(const wheel of [-.055,.055])for(let k=0;k<12;k++){
    const a=k*Math.PI/6,b=(k+1)*Math.PI/6;
-   g.beam(q(wheel+Math.cos(a)*.014,.42+Math.sin(a)*.34),q(wheel+Math.cos(b)*.014,.42+Math.sin(b)*.34),.018,C.dark,2,4);
+   g.beam(q(wheel+Math.cos(a)*.032,.42+Math.sin(a)*.34),q(wheel+Math.cos(b)*.032,.42+Math.sin(b)*.34),.018,C.dark,2,4);
   }
-  g.beam(q(-.026,.42),q(-.008,.83),.026,frame,2,4);
-  g.beam(q(-.008,.83),q(.006,.42),.026,frame,2,4);
-  g.beam(q(.006,.42),q(-.026,.42),.026,frame,2,4);
-  g.beam(q(-.008,.83),q(.026,.42),.025,frame,2,4);
-  g.beam(q(.026,.42),q(.018,.87),.026,frame,2,4);
-  g.beam(q(-.019,.87),q(.002,.87),.035,C.dark,2,4);
-  g.beam(q(.012,.89),q(.033,.89),.033,C.dark,2,4);
+  g.beam(q(-.055,.42),q(-.018,.83),.026,frame,2,4);
+  g.beam(q(-.018,.83),q(.012,.42),.026,frame,2,4);
+  g.beam(q(.012,.42),q(-.055,.42),.026,frame,2,4);
+  g.beam(q(-.018,.83),q(.055,.42),.025,frame,2,4);
+  g.beam(q(.055,.42),q(.038,.87),.026,frame,2,4);
+  g.beam(q(-.038,.87),q(.004,.87),.035,C.dark,2,4);
+  g.beam(q(.025,.89),q(.065,.89),.033,C.dark,2,4);
  });
 }
 function plazaStage(g,e){

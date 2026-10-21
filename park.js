@@ -2066,7 +2066,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261021-plaza-cafe4').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261021-plaza-cafe6').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2200,6 +2200,11 @@
     if (new URLSearchParams(location.search).get('tour') === 'fountains') visitScans();
     if (benchmark || streamTest) startGame('free');
     if(new URLSearchParams(location.search).get('tour')==='details') visitDetails();
+    if(new URLSearchParams(location.search).get('preview')==='cafe'){
+      // Stable view from the plaza for checking the bridge-facing cafe frontage.
+      startGame('free');car.x=42;car.z=-389;car.heading=1.6;car.v=0;
+      cam.yaw=1.6;cam.orbit=0;cam.pitch=.19;cam.dist=3.6;cam.top=false;
+    }
     requestAnimationFrame(frame);
   }
   boot().catch(function (err) { statusEl.textContent = 'Ошибка: ' + err.message; console.error(err); });

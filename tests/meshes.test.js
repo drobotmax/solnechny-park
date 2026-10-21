@@ -29,6 +29,15 @@ test('mapped models retain their footprints; plaza stage uses the corrected smal
  assert(depth(stage.pts)<depth(cafe.pts)*.3);
  assert.equal(models.length,buildingIds.length+rideIds.length+1);
 });
+test('bike cafe entrance glazing faces the bridge landing and plaza',()=>{
+ const cafe=entries(park).find(e=>e.kind==='bikeCafe'),mesh=build(cafe);
+ const glassX=[];
+ for(let i=0;i<mesh.data.length;i+=10){
+  if(Math.abs(mesh.data[i+6]-.18)<1e-5&&Math.abs(mesh.data[i+7]-.30)<1e-5&&Math.abs(mesh.data[i+8]-.33)<1e-5)glassX.push(mesh.data[i]);
+ }
+ assert(glassX.length>0,'front glazing is visible');
+ assert(Math.max(...glassX)<cafe.cx-10,'front glazing stays on the plaza-facing west edge');
+});
 test('geometry is deterministic across eviction and regeneration',()=>{
  for(const e of entries(park))assert.deepEqual(build(e).data,build(e).data);
 });
