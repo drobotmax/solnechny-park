@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {entries,build,buildingIds,rideIds}=require('../park-meshes.js');
+const {entries,build,buildingIds,rideIds,landingZone}=require('../park-meshes.js');
 const park=require('../park/park.json');
 test('detailed landmarks contain finite nondegenerate triangles, unit normals and bounded geometry',()=>{
  let total=0;
@@ -27,7 +27,7 @@ test('mapped models retain their footprints; plaza stage uses the corrected smal
  assert(Math.hypot(stage.cx-51,stage.cz+373.46)<2.5,'stage stays near the marked plaza edge');
  const depth=p=>Math.hypot(p[3][0]-p[0][0],p[3][1]-p[0][1]);
  assert(depth(stage.pts)<depth(cafe.pts)*.3);
- assert.equal(models.length,buildingIds.length+rideIds.length+1);
+ assert.equal(models.length,buildingIds.length+rideIds.length+2);
 });
 test('bike cafe entrance glazing faces the bridge landing and plaza',()=>{
  const cafe=entries(park).find(e=>e.kind==='bikeCafe'),mesh=build(cafe);
@@ -37,6 +37,20 @@ test('bike cafe entrance glazing faces the bridge landing and plaza',()=>{
  }
  assert(glassX.length>0,'front glazing is visible');
  assert(Math.max(...glassX)<cafe.cx-10,'front glazing stays on the plaza-facing west edge');
+});
+test('bridge landing keeps the road clear between two striped walks and planted beds',()=>{
+ const models=entries(park),coffee=models.find(e=>e.id==='b49'),landing=models.find(e=>e.kind==='bridgeLanding');
+ assert.equal(coffee.kind,'tutCoffee');
+ assert.deepEqual(landing.pts[0],park.bridges.find(b=>b.osm_id===27081408).pts[1]);
+ const a=landing.pts[0],b=landing.pts[1],length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+ const dx=(b[0]-a[0])/length,dz=(b[1]-a[1])/length;
+ const point=l=>[a[0]+dx*12+dz*l,a[1]+dz*12-dx*l];
+ assert.equal(landingZone(...point(0)),null);
+ for(const side of [-1,1]){
+  assert.equal(landingZone(...point(side*6.5)),'road');
+  assert.equal(landingZone(...point(side*11)),'bed');
+ }
+ assert.equal(landingZone(coffee.cx,coffee.cz),null);
 });
 test('geometry is deterministic across eviction and regeneration',()=>{
  for(const e of entries(park))assert.deepEqual(build(e).data,build(e).data);

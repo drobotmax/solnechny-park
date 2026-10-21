@@ -2066,13 +2066,13 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261021-plaza-cafe6').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261021-bridge-entrance1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
     meshes=new ParkStreaming.Stream(meshEntries,uploadMesh,releaseMesh,2);
     meshContacts=new Float32Array(meshEntries.filter(function(e){
-      return ['building','bumper','carousel','coaster'].indexOf(e.kind)>=0;
+      return ['building','bikeCafe','tutCoffee','bumper','carousel','coaster'].indexOf(e.kind)>=0;
     }).flatMap(function(e){
       var b=bbox(e.pts);return [e.cx,e.cz,Math.max(1,(b[2]-b[0])/2),Math.max(1,(b[3]-b[1])/2)];
     }));
@@ -2082,6 +2082,8 @@
     park.landmarks = park.landmarks.filter(function (lm) { return lm.kind !== 'fountain'; });
     park.labels = park.labels.filter(function (label) { return label[0] !== 'Фонтан'; });
     park.scans.forEach(function (scan) { park.labels.unshift([scan.name, scan.at, 16]); });
+    var tutCoffeeEntry=meshEntries.find(function(e){return e.kind==='tutCoffee';});
+    park.labels.unshift(['Тут кофе',[tutCoffeeEntry.cx,tutCoffeeEntry.cz],22]);
     var oakSites = park.landmarks.filter(function (lm) { return lm.kind === 'oak'; });
     park.trees = park.trees.filter(function (tree) {
       return !park.scans.some(function (scan) { return Math.hypot(tree[0] - scan.at[0], tree[1] - scan.at[1]) < 9; }) &&
@@ -2097,6 +2099,14 @@
     var rgba = cx.getImageData(0, 0, park.w, park.h).data;
     cats = new Uint8Array(park.w * park.h);
     for (var i = 0; i < cats.length; i++) cats[i] = rgba[i * 4];
+    for(var z=-440;z<=-400;z+=park.mpp)for(var x=-22;x<=43;x+=park.mpp){
+      var zone=ParkMeshes.landingZone(x,z);
+      if(!zone)continue;
+      var ix=Math.floor((x-park.x0)/park.mpp),iz=Math.floor((z-park.z0)/park.mpp);
+      if(ix<0||iz<0||ix>=park.w||iz>=park.h)continue;
+      var index=iz*park.w+ix;
+      if(!SOLID[cats[index]&31])cats[index]=(zone==='bed'?FENCE:ROAD)|IN_PARK;
+    }
     park.scans.forEach(function (scan) {
       var box = bbox(scan.footprint);
       for (var z = box[1]; z <= box[3]; z += park.mpp) for (var x = box[0]; x <= box[2]; x += park.mpp) {
@@ -2200,10 +2210,16 @@
     if (new URLSearchParams(location.search).get('tour') === 'fountains') visitScans();
     if (benchmark || streamTest) startGame('free');
     if(new URLSearchParams(location.search).get('tour')==='details') visitDetails();
-    if(new URLSearchParams(location.search).get('preview')==='cafe'){
+    var preview=new URLSearchParams(location.search).get('preview');
+    if(preview==='cafe'){
       // Stable view from the plaza for checking the bridge-facing cafe frontage.
       startGame('free');car.x=42;car.z=-389;car.heading=1.6;car.v=0;
       cam.yaw=1.6;cam.orbit=0;cam.pitch=.19;cam.dist=3.6;cam.top=false;
+    }else if(preview==='entrance'||preview==='tut-coffee'){
+      // Views along the bridge descent and toward the cafe's west-facing entrance.
+      startGame('free');car.x=preview==='entrance'?7:14;car.z=preview==='entrance'?-434:-406;
+      car.heading=preview==='entrance'?2.94:1.55;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.18;cam.dist=preview==='entrance'?4:3.7;cam.top=false;
     }
     requestAnimationFrame(frame);
   }

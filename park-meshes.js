@@ -4,15 +4,25 @@
 const buildingIds=[3,5,6,7,49,50,81], rideIds=[0,1,2,6,9,17,25,26,27,36];
 // Placed and scaled to the stage rectangle marked in the user's plaza screenshot.
 const plazaStageFootprint=[[49.93,-379.74],[44.53,-369.06],[50.08,-366.26],[55.48,-376.94]];
+const bridgeLandingAxis=[[7.87,-432.91],[13.3,-406.85]];
+function landingZone(x,z){
+ const a=bridgeLandingAxis[0],b=bridgeLandingAxis[1],length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+ const dx=(b[0]-a[0])/length,dz=(b[1]-a[1])/length;
+ const s=(x-a[0])*dx+(z-a[1])*dz,l=Math.abs((x-a[0])*dz-(z-a[1])*dx),half=3.2+.12*s;
+ if(s>=0&&s<=25&&l>=half&&l<=half+4.05)return 'road';
+ if(s>=1.5&&s<=23.5&&l>=half+4.45&&l<=half+((x-a[0])*dz-(z-a[1])*dx>0?13-.08*s:12-.05*s))return 'bed';
+ return null;
+}
 const C={cream:[.80,.75,.63],trim:[.92,.89,.80],roof:[.28,.20,.16],glass:[.18,.30,.33],red:[.68,.12,.10],steel:[.57,.60,.58],gold:[.73,.53,.20],dark:[.12,.15,.15]};
 function center(p){return p.reduce((a,b)=>[a[0]+b[0]/p.length,a[1]+b[1]/p.length],[0,0]);}
 function entries(park){
  const stageCenter=center(plazaStageFootprint);
- return buildingIds.map(i=>{const b=park.buildings[i],c=center(b.pts);return {id:'b'+i,cx:c[0],cz:c[1],kind:i===7?'bikeCafe':'building',pts:b.pts,h:i===81?8:b.h,style:i===81?'colonnade':'cafe'};})
+ return buildingIds.map(i=>{const b=park.buildings[i],c=center(b.pts);return {id:'b'+i,cx:c[0],cz:c[1],kind:i===7?'bikeCafe':i===49?'tutCoffee':'building',pts:b.pts,h:i===81?8:b.h,style:i===81?'colonnade':'cafe'};})
  .concat(rideIds.map(i=>{const r=park.rides[i],c=center(r.pts);
   const kind=i===1?'coaster':i===36?'carousel':i===0||i===2?'bumper':i===17?'train':i===26?'swingTower':i===27?'pendulum':'spinner';
   return {id:'r'+i,cx:c[0],cz:c[1],kind,pts:r.pts};}))
- .concat([{id:'plaza-stage',cx:stageCenter[0],cz:stageCenter[1],kind:'plazaStage',pts:plazaStageFootprint}]);
+ .concat([{id:'plaza-stage',cx:stageCenter[0],cz:stageCenter[1],kind:'plazaStage',pts:plazaStageFootprint},
+  {id:'entrance-landing',cx:10.6,cz:-419.9,kind:'bridgeLanding',pts:bridgeLandingAxis}]);
 }
 function Geometry(){this.data=[];}
 Geometry.prototype.tri=function(a,b,c,color,mat){
@@ -139,6 +149,101 @@ function bikeCafe(g,e){
   g.beam(q(-.038,.87),q(.004,.87),.035,C.dark,2,4);
   g.beam(q(.025,.89),q(.065,.89),.033,C.dark,2,4);
  });
+}
+function tutCoffee(g,e){
+ // The short west gable faces the bridge descent; the long timber wall faces the park.
+ const at=(u,v,y)=>footprintPoint(e.pts,u,v,y);
+ const cream=[.78,.78,.72],timber=[.23,.17,.14],roof=[.13,.14,.14],glass=[.11,.18,.20];
+ const walls=[[0,0,1,0,cream],[1,0,1,1,timber],[1,1,0,1,timber],[0,1,0,0,timber]];
+ for(const [u0,v0,u1,v1,color] of walls)
+  g.quad(at(u0,v0,0),at(u1,v1,0),at(u1,v1,3.2),at(u0,v0,3.2),color,1);
+ for(const v of [0,1])g.tri(at(0,v,3.2),at(.5,v,4.85),at(1,v,3.2),v===0?cream:timber,1);
+ g.quad(at(-.07,-.035,3.18),at(.5,-.035,5),at(.5,1.035,5),at(-.07,1.035,3.18),roof,4);
+ g.quad(at(.5,-.035,5),at(1.07,-.035,3.18),at(1.07,1.035,3.18),at(.5,1.035,5),[.18,.18,.17],4);
+ for(let y=.3;y<3.2;y+=.32)
+  for(const u of [-.012,1.012])g.beam(at(u,0,y),at(u,1,y),.025,[.34,.25,.20],2,4);
+ const front=(u,y)=>at(u,-.022,y),pane=(u,y)=>at(u,-.03,y);
+ g.quad(front(.29,.1),front(.71,.1),front(.71,2.72),front(.29,2.72),[.12,.12,.12],1);
+ for(const [u0,u1] of [[.32,.49],[.51,.68]]){
+  g.quad(pane(u0,.65),pane(u1,.65),pane(u1,2.55),pane(u0,2.55),glass,3);
+  for(const u of [u0,u1])g.beam(pane(u,.12),pane(u,2.68),.045,[.55,.57,.55],2,4);
+  g.beam(pane(u0,2.55),pane(u1,2.55),.05,[.55,.57,.55],2,4);
+ }
+ g.beam(pane(.29,2.72),pane(.71,2.72),.07,[.62,.63,.61],2,4);
+ for(const u of [.485,.515])g.beam(pane(u,1.15),pane(u,1.45),.022,[.76,.72,.58],2,4);
+ // Block lettering keeps the photographed "ТУТ" sign readable without a texture.
+ const sign=(u,y)=>at(u,-.028,y),ink=[.08,.10,.10];
+ for(const c of [.34,.66]){
+  g.beam(sign(c-.075,4.03),sign(c+.075,4.03),.055,ink,2,4);
+  g.beam(sign(c,4.03),sign(c,3.52),.055,ink,2,4);
+ }
+ g.beam(sign(.44,4.03),sign(.50,3.69),.052,ink,2,4);
+ g.beam(sign(.56,4.03),sign(.50,3.69),.052,ink,2,4);
+ g.beam(sign(.50,3.69),sign(.48,3.51),.052,ink,2,4);
+ // A service window and horizontal boards distinguish the long park-side wall.
+ const side=(v,y)=>at(1.018,v,y);
+ g.quad(side(.47,1.03),side(.84,1.03),side(.84,2.57),side(.47,2.57),glass,3);
+ for(const v of [.47,.84])g.beam(side(v,1.03),side(v,2.57),.065,[.52,.45,.37],2,4);
+ g.beam(side(.47,2.57),side(.84,2.57),.07,[.52,.45,.37],2,4);
+ g.box(...at(-.13,.14,.02),.62,2.25,.78,[.23,.38,.48],1);
+}
+function bridgeLanding(g){
+ const a=bridgeLandingAxis[0],b=bridgeLandingAxis[1],length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+ const dx=(b[0]-a[0])/length,dz=(b[1]-a[1])/length;
+ const at=(s,l,y)=>[a[0]+dx*s+dz*l,y,a[1]+dz*s-dx*l];
+ const half=s=>3.2+.12*s,hash=(s,t,side)=>{const n=Math.sin(s*78.233+t*19.19+side*31.71)*43758.5453;return n-Math.floor(n);};
+ // The bars cross only the two pedestrian shoulders, leaving the centre lane open.
+ for(const side of [-1,1])g.quad(at(0,side*half(0),.025),at(25,side*half(25),.025),
+  at(25,side*(half(25)+4.05),.025),at(0,side*(half(0)+4.05),.025),[.34,.34,.33],1);
+ for(const side of [-1,1])for(let s=1.3;s<25;s+=1.65){
+  const inner=side*(half(s)+.12),outer=side*(half(s)+4.05);
+  g.quad(at(s,inner,.055),at(s+.68,inner,.055),at(s+.68,outer,.055),at(s,outer,.055),[.84,.84,.81],1);
+ }
+ for(const side of [-1,1]){
+  const inner=s=>half(s)+4.45,outer=s=>half(s)+(side>0?13-.08*s:12-.05*s);
+  const soil=side>0?[.35,.32,.27]:[.31,.31,.24];
+  g.quad(at(1.5,side*inner(1.5),.22),at(23.5,side*inner(23.5),.22),
+   at(23.5,side*outer(23.5),.7),at(1.5,side*outer(1.5),.7),soil,1);
+  g.quad(at(1.5,side*inner(1.5),0),at(23.5,side*inner(23.5),0),
+   at(23.5,side*inner(23.5),.22),at(1.5,side*inner(1.5),.22),[.48,.46,.40],1);
+  g.quad(at(23.5,side*outer(23.5),0),at(1.5,side*outer(1.5),0),
+   at(1.5,side*outer(1.5),.7),at(23.5,side*outer(23.5),.7),[.44,.43,.38],1);
+  for(let s=1.5;s<23.5;s+=.8){
+   const e=Math.min(s+.8,23.5),in0=side*inner(s),in1=side*inner(e),out0=side*outer(s),out1=side*outer(e);
+   g.beam(at(s,in0,.20),at(e,in1,.20),.16,[.51,.49,.43],2,5);
+   g.beam(at(s,out0,.52),at(e,out1,.52),.17,[.48,.46,.40],2,5);
+   g.beam(at(s,side*(inner(s)+.55),.42),at(e,side*(inner(e)+.55),.42),.19,[.16,.31,.13],2,5);
+  }
+  for(let s=3;s<22;s+=1.25)for(let t=.18;t<.95;t+=.19){
+   const l=inner(s)+(outer(s)-inner(s))*t,q=at(s,side*l,.22+.48*t),h=hash(s,t,side);
+   if(h<.38){
+    const stone=side>0?[.52,.49,.45]:[.50,.48,.42];
+    g.box(q[0],q[1],q[2],.35+h*.65,.14+h*.24,.38+h*.45,stone,1);
+   }else if(h<.59){
+    g.box(q[0],q[1],q[2],.48,.56,.52,side>0?[.38,.48,.35]:[.25,.42,.20],1);
+   }else{
+    g.beam(q,at(s,side*l,q[1]+.5),.025,[.22,.38,.17],2,4);
+    g.box(q[0],q[1]+.42,q[2],.36,.20,.36,
+     side>0?(h>.78?[.82,.81,.75]:[.67,.41,.47]):(h>.78?[.87,.58,.16]:[.76,.73,.20]),1);
+   }
+  }
+  for(const s of [5,10,16,21]){
+   const q=at(s,side*(outer(s)-1.7),.62),t=hash(s,1,side);
+   g.box(q[0],q[1],q[2],1.4+t*.6,1.0+t*.7,1.4+t*.6,[.20+t*.08,.34+t*.10,.17],1);
+  }
+  if(side<0){
+   for(let i=0;i<8;i++){
+    const s=8+i*.65,q=at(s,side*(outer(s)-2.8+(i%3)*.42),.55);
+    g.box(q[0],q[1],q[2],.65+(i%2)*.25,.42+(i%4)*.18,.6,[.55,.53,.48],1);
+   }
+  }else{
+   const c=at(10,inner(10)+3.5,.48);
+   for(let i=0;i<9;i++){
+    const theta=i*2*Math.PI/9,tip=[c[0]+Math.cos(theta)*1.35,1.12,c[2]+Math.sin(theta)*1.35];
+    g.beam(c,tip,.12,[.33,.47,.42],2,5);
+   }
+  }
+ }
 }
 function plazaStage(g,e){
  // The western edge turns slightly toward the bridge; the open arch faces it.
@@ -301,11 +406,11 @@ function pendulum(g,e){
  }
 }
 function build(e){
- const g=new Geometry();({building,bikeCafe,plazaStage,bumper,carousel,coaster,spinner,train,swingTower,pendulum}[e.kind])(g,e);
+ const g=new Geometry();({building,bikeCafe,tutCoffee,bridgeLanding,plazaStage,bumper,carousel,coaster,spinner,train,swingTower,pendulum}[e.kind])(g,e);
  const data=new Float32Array(g.data);let radius=0;
  for(let i=0;i<data.length;i+=10)radius=Math.max(radius,Math.hypot(data[i]-e.cx,data[i+1]-5,data[i+2]-e.cz));
  return {data,n:data.length/10,center:[e.cx,5,e.cz],radius};
 }
-const api={entries,build,buildingIds,rideIds};
+const api={entries,build,buildingIds,rideIds,landingZone};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkMeshes=api;
 })(typeof window!=='undefined'?window:globalThis);
