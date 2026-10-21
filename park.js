@@ -23,6 +23,8 @@
   SURF[LAWN] = [0.62, 2.2]; SURF[WOOD] = [0.5, 2.8]; SURF[OUTSIDE] = [0.55, 2.4]; SURF[SAND] = [0.4, 3.5]; SURF[PITCH] = [0.8, 1.4];
   // Boundary traced from the user's marked aerial view; the whole forecourt is asphalt.
   var plazaAsphaltFootprint = [[53.71,-380.09],[57.96,-397.52],[52.15,-398.55],[38.61,-401.02],[16.09,-400.4],[1.04,-399.32],[-15.77,-392.47],[-16.52,-385.3],[6.47,-367.62],[34.97,-371.43]];
+  // The filmed asphalt continues between the bridge landing and the square.
+  var plazaApproachAsphaltFootprint = [[4.94,-407.78],[20.6,-411.04],[23.05,-399.3],[7.39,-396.04]];
 
   // Stroller physics, at speed ×1. Running pace with a parent behind it, a
   // short sprint on turbo; a stroller pivots on the spot, so steering works
@@ -683,9 +685,13 @@
         });
       }
     });
+    // Keep the photographed line of sight across the forecourt free of old mapped lamps.
+    var plazaOpenSightline = [[11,-407],[43,-405],[47,-387],[13,-388]];
+    var bridgeLandingSightline = [[5,-415],[20,-415],[23,-399],[7,-399]];
     park.props.forEach(function (p) {
       var kind = p[0], x = p[1], z = p[2], y;
       if (kind === 'lamp') {
+        if (inside(plazaOpenSightline,x,z) || inside(bridgeLandingSightline,x,z)) return;
         for (y = 0; y < 4; y += 0.12) cl.add(x, y, z, [52, 52, 56], 0.07, false);
         cl.add(x, 4.1, z, [255, 226, 160], 0.32, true);
         cl.add(x, 3.95, z, [255, 210, 130], 0.22, true);
@@ -1527,6 +1533,7 @@
   }
 
   var optimized = new URLSearchParams(location.search).get('optimize') !== '0';
+  var calibrationMode = new URLSearchParams(location.search).get('calibrate') === '1';
   var t0 = performance.now();
   function draw(now) {
     var renderStart = performance.now(), submitted = 0, calls = 1, batches = new Map();
@@ -1548,6 +1555,11 @@
     var cfx = Math.sin(yaw), cfz = -Math.cos(yaw), cp = Math.cos(pitch);
     var sh = cam.shake;
     var eye = [tgt[0] - cfx * dist * cp + (Math.random() - 0.5) * sh, Math.max(0.3, tgt[1] + dist * Math.sin(pitch)) + (Math.random() - 0.5) * sh, tgt[2] - cfz * dist * cp];
+    if (calibrationMode && window.__calibrationCamera) {
+      var ref = window.__calibrationCamera;
+      eye = [ref.x, ref.y === undefined ? 1.65 : ref.y, ref.z];
+      tgt = [ref.x + Math.sin(ref.heading) * 30, eye[1] + Math.tan(ref.pitch || 0) * 30, ref.z - Math.cos(ref.heading) * 30];
+    }
     var view = lookAt(eye, tgt);
     var fogFar = state.night ? 70 : 150, fogNear = state.night ? 10 : 30;
     if (cam.top) { fogFar *= 2; fogNear *= 2; }
@@ -1772,7 +1784,7 @@
     game.bottles.forEach(function (b) {
       drawCloud(bottleGPU, yawMat(time * 1.5 + b.phase, b.x, 0.08 + 0.06 * Math.sin(time * 3 + b.phase), b.z), 10);
     });
-    drawCloud(stroller.gpu, model, 6);
+    if (!calibrationMode) drawCloud(stroller.gpu, model, 6);
     flushClouds();
     window.__stats.drawnPoints=submitted; window.__stats.drawCalls=calls;
     window.__stats.renderCpuMs=+(performance.now()-renderStart).toFixed(2);
@@ -2098,7 +2110,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261021-bridge-slope1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261021-plaza-layout1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2147,14 +2159,16 @@
         if (ix >= 0 && iz >= 0 && ix < park.w && iz < park.h) cats[iz * park.w + ix] = FENCE | IN_PARK;
       }
     });
-    var plazaBox=bbox(plazaAsphaltFootprint);
-    for (var z=plazaBox[1]; z<=plazaBox[3]; z+=park.mpp) for (var x=plazaBox[0]; x<=plazaBox[2]; x+=park.mpp) {
-      if (!inside(plazaAsphaltFootprint,x,z)) continue;
-      var ix=Math.floor((x-park.x0)/park.mpp), iz=Math.floor((z-park.z0)/park.mpp);
-      if (ix<0 || iz<0 || ix>=park.w || iz>=park.h) continue;
-      var index=iz*park.w+ix;
-      if (!SOLID[cats[index]&31]) cats[index]=ROAD|IN_PARK;
-    }
+    [plazaAsphaltFootprint,plazaApproachAsphaltFootprint].forEach(function(footprint){
+      var plazaBox=bbox(footprint);
+      for (var z=plazaBox[1]; z<=plazaBox[3]; z+=park.mpp) for (var x=plazaBox[0]; x<=plazaBox[2]; x+=park.mpp) {
+        if (!inside(footprint,x,z)) continue;
+        var ix=Math.floor((x-park.x0)/park.mpp), iz=Math.floor((z-park.z0)/park.mpp);
+        if (ix<0 || iz<0 || ix>=park.w || iz>=park.h) continue;
+        var index=iz*park.w+ix;
+        if (!SOLID[cats[index]&31]) cats[index]=ROAD|IN_PARK;
+      }
+    });
     var stageBox=bbox(stageFootprint);
     for (var z=stageBox[1]; z<=stageBox[3]; z+=park.mpp) for (var x=stageBox[0]; x<=stageBox[2]; x+=park.mpp) {
       if (!inside(stageFootprint,x,z)) continue;
@@ -2271,6 +2285,17 @@
       startGame('free');car.x=preview==='entrance'?7:14;car.z=preview==='entrance'?-434:-406;
       car.heading=preview==='entrance'?2.94:1.55;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.18;cam.dist=preview==='entrance'?4:3.7;cam.top=false;
+    }
+    if (calibrationMode) {
+      var query=new URLSearchParams(location.search);
+      var referenceX=Number(query.get('x')),referenceZ=Number(query.get('z'));
+      var referenceHeading=Number(query.get('heading'));
+      if (query.has('x')&&query.has('z')&&query.has('heading')&&
+          Number.isFinite(referenceX)&&Number.isFinite(referenceZ)&&Number.isFinite(referenceHeading)) {
+        startGame('free');car.x=referenceX;car.z=referenceZ;car.heading=referenceHeading;car.v=0;
+        window.__calibrationCamera={x:referenceX,z:referenceZ,heading:referenceHeading,y:1.65,pitch:0};
+      }
+      document.body.classList.add('calibration');
     }
     requestAnimationFrame(frame);
   }

@@ -276,6 +276,8 @@ over roughly 27 m into the square. Its sidewalks, planted edges, stroller, camer
 and uphill/downhill motion follow the same height profile. This elevation is an
 illustrative estimate from the supplied photos, not a surveyed measurement. Other
 dimensions remain approximate because the footage is not a measured survey.
+Fixed eye-level comparison views of the bridge landing, square, and western alley
+are recorded in [the layout reference](docs/references/plaza-layout.md).
 
 ### Plaza stage and bicycle cafe
 
