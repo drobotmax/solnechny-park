@@ -47,7 +47,7 @@
     mono: ['000000', 'ffffff'],
   };
   var SPREAD = { pico8: 0.18, gameboy: 0.3, cga: 0.45, mono: 0.6 };
-  var DEFAULTS = { pix: 2, speedMul: 1, palette: 'source', accent: '#e4342a', dither: false, night: false, grain: true, mini: true, sound: true };
+  var DEFAULTS = { pix: 1, speedMul: 1, palette: 'source', accent: '#e4342a', dither: false, night: false, grain: true, mini: true, sound: true };
   var state = Object.assign({}, DEFAULTS, readSaved(), readQuery());
   var doomMode = false, cheatBuffer = '', cheatAt = 0, doomHorde = null, doomCorpses = [], doomKills = 0, doomGunGPU = null, doomBarrelGPU = null, doomFlameGPU = null;
   var doomMusic = new Audio('assets/audio/at-dooms-gate-8bit.mp3');
@@ -195,6 +195,17 @@
     float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
     int category(vec2 uv){return int(texture(uGround,uv).r*255.+.5)&31;}
     bool paved(int c){return c==2||c==3||c==9||c==11;}
+    float asphaltCrack(vec2 p,float pixel){
+      vec2 tile=floor(p/6.);
+      float gate=step(.82,hash(tile+vec2(19.,7.)));
+      vec2 local=fract(p/6.);
+      float seed=hash(tile+vec2(3.,23.));
+      float center=.18+.64*seed+(local.y-.5)*(.32*(hash(tile+vec2(7.,13.))-.5))
+        +.025*sin(local.y*15.+seed*9.);
+      float distance=abs(local.x-center)*6.;
+      float lengthMask=smoothstep(.06,.19,local.y)*(1.-smoothstep(.75,.91,local.y));
+      return gate*lengthMask*(1.-smoothstep(.012,.022+pixel,distance));
+    }
     void main(){
       if(uRampPass==1&&vRampHeight<.002)discard;
       vec2 uv=(vXZ-uFrame.xy)/uFrame.zw;
@@ -222,7 +233,13 @@
         c+=grain*.10;
       }else if(cat==3||cat==9){
         float wear=hash(floor(vXZ/2.8));
-        c=vec3(.36,.37,.38)*( .96+.08*wear)+grain*.16;
+        float fine=hash(floor(vXZ/.09))-.5;
+        c=vec3(.43,.44,.45)*(.96+.07*wear)+fine*.018*(1.-smoothstep(.08,.2,pixel));
+        bool entrance=vXZ.x>-24.&&vXZ.x<60.&&vXZ.y>-444.&&vXZ.y< -365.;
+        if(cat==3&&entrance&&vDist<45.){
+          float detail=1.-smoothstep(25.,45.,vDist);
+          c*=1.-.23*asphaltCrack(vXZ,pixel)*detail;
+        }
       }else if(cat==4){
         float w=sin(vXZ.x*.45+uTime*.9)*sin(vXZ.y*.6-uTime*1.2);
         c=mix(vec3(.17,.32,.30),sat,.35)+(w>.82?vec3(.18):vec3(0.));
@@ -1584,7 +1601,7 @@
     gl.uniform1f(u.uDither, state.dither ? 1 : 0);
     gl.uniform1f(u.uLight, doomMode ? 0.65 : state.night ? 0.5 : 1);
   }
-  function bgColor() { if (doomMode) return [0.09, 0.004, 0.003]; return state.night || state.palette === 'accent' ? [0x0a / 255, 0x0a / 255, 0x0a / 255] : [0.70, 0.78, 0.84]; }
+  function bgColor() { if (doomMode) return [0.09, 0.004, 0.003]; return state.night || state.palette === 'accent' ? [0x0a / 255, 0x0a / 255, 0x0a / 255] : [0.61, 0.74, 0.86]; }
   function clearColor() {
     var c = bgColor();
     if (doomMode) return c;
@@ -1623,7 +1640,7 @@
       tgt = [ref.x + Math.sin(ref.heading) * 30, eye[1] + Math.tan(ref.pitch || 0) * 30, ref.z - Math.cos(ref.heading) * 30];
     }
     var view = lookAt(eye, tgt);
-    var fogFar = state.night ? 70 : 150, fogNear = state.night ? 10 : 30;
+    var fogFar = state.night ? 70 : 170, fogNear = state.night ? 10 : 60;
     if (cam.top) { fogFar *= 2; fogNear *= 2; }
     var fov = cam.fov;
     var proj = perspective(fov, canvas.width / canvas.height, 0.08, fogFar + 30);
@@ -2183,7 +2200,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261021-no-face1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261021-daylight-asphalt1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);

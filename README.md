@@ -250,6 +250,10 @@ Paths and plazas use separate procedural paving patterns, asphalt uses fine aggr
 and surface-map borders receive a painted curb and soil transition. These borders are
 visual shading, not raised collision geometry. Fine detail fades at subpixel scale to
 reduce motion shimmer. No external textures are downloaded.
+The daytime view now uses a clearer blue distance haze and a one-CSS-pixel render buffer
+by default. The asphalt has softer aggregate and sparse, distance-faded cracks around
+the bridge landing and square; the Pixel slider still controls rendering cost.
+[Entrance view after the daylight and asphalt pass](docs/screenshots/entrance-daylight-asphalt.png).
 
 ### Ride structures
 
