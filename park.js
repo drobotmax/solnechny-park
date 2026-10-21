@@ -446,6 +446,56 @@
     return { pos: pos, col: col, size: size, length: a1 - a0, width: c1 - c0 };
   }
 
+  // The scan preserves the hood and basket, but its four wheels are noisy and
+  // fixed in place. Replace only their low outer clusters with rolling wheels.
+  function prepareStroller(s) {
+    var axle = s.width * 0.38;
+    var wheels = [
+      { z: -s.length * 0.36, radius: Math.min(0.075, s.length * 0.065), front: true },
+      { z: s.length * 0.19, radius: Math.min(0.105, s.length * 0.08), front: false }
+    ];
+    var pos = [], col = [], size = [];
+    for (var i = 0; i < s.size.length; i++) {
+      var x = s.pos[i * 3], y = s.pos[i * 3 + 1], z = s.pos[i * 3 + 2];
+      var scannedWheel = wheels.some(function (wheel) {
+        return Math.abs(Math.abs(x) - axle) < 0.085 &&
+          Math.hypot(y - wheel.radius, z - wheel.z) < s.length * (wheel.front ? 0.13 : 0.145);
+      });
+      if (scannedWheel) continue;
+      pos.push(x, y, z);
+      for (var channel = 0; channel < 4; channel++) col.push(s.col[i * 4 + channel]);
+      size.push(s.size[i]);
+    }
+    wheels.forEach(function (wheel) { wheel.gpu = buildStrollerWheel(wheel.radius); });
+    return { gpu: cloudVAO(new Float32Array(pos), new Uint8Array(col), new Float32Array(size)),
+      wheels: wheels, axle: axle, length: s.length, width: s.width };
+  }
+
+  function buildStrollerWheel(radius) {
+    var cloud = new Cloud();
+    for (var side = -1; side <= 1; side += 2) {
+      for (var step = 0; step < 64; step++) {
+        var angle = step * Math.PI / 32;
+        for (var band = -1; band <= 1; band++) {
+          var r = radius + band * 0.012;
+          cloud.add(side * 0.025, Math.cos(angle) * r, Math.sin(angle) * r,
+            band === 0 ? [26, 28, 30] : [38, 40, 42], 0.01, false);
+        }
+        for (var inner = 0.012; inner < radius * 0.72; inner += 0.012)
+          cloud.add(side * 0.029, Math.cos(angle) * inner,
+            Math.sin(angle) * inner, [32, 35, 38], 0.012, false);
+      }
+      for (var spoke = 0; spoke < 5; spoke++) {
+        var th = spoke * Math.PI * 2 / 5;
+        for (var r2 = 0.018; r2 < radius * 0.72; r2 += 0.016)
+          cloud.add(side * 0.034, Math.cos(th) * r2, Math.sin(th) * r2,
+            [78, 82, 84], 0.006, false);
+      }
+      cloud.add(side * 0.037, 0, 0, [110, 114, 115], 0.014, false);
+    }
+    return cloud.upload();
+  }
+
   // The scanned paving is not level: fit y = a x + b z + c to the lowest
   // splats in 0.2 m cells of a ring around the stroller, dropping cells on
   // the curb or grass after the first pass.
@@ -1194,13 +1244,13 @@
 
   // ---------------------------------------------------------- simulation ---
 
-  var car = { x: 0, z: 0, heading: 0, v: 0, odo: 0, steer: 0, stamina: STAMINA };
+  var car = { x: 0, z: 0, heading: 0, v: 0, odo: 0, wheelTravel: 0, steer: 0, stamina: STAMINA };
   var cam = { yaw: 0, orbit: 0, pitch: 0.28, dist: 4.4, top: false, shake: 0, fov: FOV0 };
   var keys = {};
   var game = { mode: 'menu', milk: MILK_START, found: 0, time: 0, bottles: [], starveT: 0, lastTick: 0 };
 
   function respawn() {
-    car.x = park.start[0]; car.z = park.start[1]; car.heading = park.start[2]; car.v = 0; car.steer = 0; car.stamina = STAMINA; car.odo = 0;
+    car.x = park.start[0]; car.z = park.start[1]; car.heading = park.start[2]; car.v = 0; car.steer = 0; car.stamina = STAMINA; car.odo = 0; car.wheelTravel = 0;
     cam.yaw = car.heading; cam.orbit = 0;
   }
 
@@ -1257,12 +1307,14 @@
     var sx = Math.sin(car.heading), sz = -Math.cos(car.heading);
     var mx = sx * car.v * dt, mz = sz * car.v * dt;
     if (!mx && !mz) return;
-    if (!blockedAt(car.x + mx, car.z + mz, car.heading)) { car.x += mx; car.z += mz; car.odo += sp * dt; return; }
+    if (!blockedAt(car.x + mx, car.z + mz, car.heading)) {
+      car.x += mx; car.z += mz; car.odo += sp * dt; car.wheelTravel += car.v * dt; return;
+    }
     // Slide along whatever we hit, losing the speed that went into it.
     var canX = !blockedAt(car.x + mx, car.z, car.heading), canZ = !blockedAt(car.x, car.z + mz, car.heading);
     var impact = sp;
-    if (canX && (!canZ || Math.abs(mx) >= Math.abs(mz))) { car.x += mx; car.odo += Math.abs(mx); car.v *= Math.abs(sx) * 0.9 + 0.05; impact = sp * Math.abs(sz); }
-    else if (canZ) { car.z += mz; car.odo += Math.abs(mz); car.v *= Math.abs(sz) * 0.9 + 0.05; impact = sp * Math.abs(sx); }
+    if (canX && (!canZ || Math.abs(mx) >= Math.abs(mz))) { car.x += mx; car.odo += Math.abs(mx); car.wheelTravel += Math.sign(car.v) * Math.abs(mx); car.v *= Math.abs(sx) * 0.9 + 0.05; impact = sp * Math.abs(sz); }
+    else if (canZ) { car.z += mz; car.odo += Math.abs(mz); car.wheelTravel += Math.sign(car.v) * Math.abs(mz); car.v *= Math.abs(sz) * 0.9 + 0.05; impact = sp * Math.abs(sx); }
     else { car.v = 0; }
     if (impact > 1.5) { cam.shake = Math.min(0.25, impact * 0.04); sfx('bump'); }
   }
@@ -1784,7 +1836,18 @@
     game.bottles.forEach(function (b) {
       drawCloud(bottleGPU, yawMat(time * 1.5 + b.phase, b.x, 0.08 + 0.06 * Math.sin(time * 3 + b.phase), b.z), 10);
     });
-    if (!calibrationMode) drawCloud(stroller.gpu, model, 6);
+    if (!calibrationMode) {
+      drawCloud(stroller.gpu, model, 6);
+      stroller.wheels.forEach(function (wheel) {
+        [-1, 1].forEach(function (side) {
+          var base = mat4mul(model, yawMat(wheel.front ? car.steer * 0.35 : 0,
+            side * stroller.axle, wheel.radius, wheel.z));
+          var spin = -car.wheelTravel / wheel.radius, c = Math.cos(spin), s = Math.sin(spin);
+          drawCloud(wheel.gpu, mat4mul(base,
+            [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]), 7);
+        });
+      });
+    }
     flushClouds();
     window.__stats.drawnPoints=submitted; window.__stats.drawCalls=calls;
     window.__stats.renderCpuMs=+(performance.now()-renderStart).toFixed(2);
@@ -2110,7 +2173,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261021-plaza-layout1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261021-stroller-wheels1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2258,8 +2321,10 @@
       if(!spz.ok) throw new Error('Stroller '+spz.status);
       s=extractStroller(SPZ.parse(await SPZ.gunzip(await spz.arrayBuffer())));
     } else s=await loadPackedCloud(res[4].stroller);
-    stroller = { gpu: cloudVAO(s.pos, s.col, s.size), length: s.length, width: s.width };
-    window.__stats.stroller = { points: s.size.length, length: +s.length.toFixed(2), width: +s.width.toFixed(2) };
+    stroller = prepareStroller(s);
+    window.__stats.stroller = { scanPoints: s.size.length, bodyPoints: stroller.gpu.n,
+      wheelPoints: stroller.wheels.reduce(function (n, wheel) { return n + wheel.gpu.n * 2; }, 0),
+      length: +s.length.toFixed(2), width: +s.width.toFixed(2) };
 
     buildPigeons();
     buildDogs();

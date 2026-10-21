@@ -4,7 +4,7 @@ const fs=require('fs'),vm=require('vm');
 const source=fs.readFileSync(require.resolve('../park.js'),'utf8');
 const physics=source.slice(source.indexOf('  function physics(dt)'),source.indexOf('  // --------------------------------------------------------------- bottles'));
 function setup(blockedAt=()=>false){
- const ctx={Math,game:{mode:'free'},car:{x:0,z:0,v:0,heading:0,steer:0,stamina:4,odo:0},keys:{up:true},state:{speedMul:1},SURF:{2:[1,.5]},catAt:()=>2,blockedAt,cam:{},sfx:()=>{},ParkMeshes:{terrainHeight:()=>0},STAMINA:4,REGEN:.5,RUN:4,TURBO:7,REVERSE:1.8,PUSH:3.5,BRAKE:8,TURN_PIVOT:1.9,TURN_MAX:2.4};
+ const ctx={Math,game:{mode:'free'},car:{x:0,z:0,v:0,heading:0,steer:0,stamina:4,odo:0,wheelTravel:0},keys:{up:true},state:{speedMul:1},SURF:{2:[1,.5]},catAt:()=>2,blockedAt,cam:{},sfx:()=>{},ParkMeshes:{terrainHeight:()=>0},STAMINA:4,REGEN:.5,RUN:4,TURBO:7,REVERSE:1.8,PUSH:3.5,BRAKE:8,TURN_PIVOT:1.9,TURN_MAX:2.4};
  vm.createContext(ctx);vm.runInContext(physics,ctx);return ctx;
 }
 test('full obstruction stops stroller without reversing it',()=>{
@@ -23,6 +23,15 @@ test('fixed-step simulation gives the same distance at 30, 60 and 120 fps',()=>{
 test('wall sliding advances odometer and stays outside obstruction',()=>{
  const c=setup((x,z)=>x>.01);c.car.v=4;c.car.heading=Math.PI/4;c.physics(1/120);
  assert.equal(c.car.x,0);assert(c.car.z<0);assert(c.car.odo>0);assert(c.car.v>=0);
+ assert.equal(c.car.wheelTravel,c.car.odo);
+});
+test('wheels turn backward with actual reverse travel and stop at an obstruction',()=>{
+ const c=setup();c.keys={down:true};
+ for(let i=0;i<30;i++)c.physics(1/120);
+ assert(c.car.wheelTravel<0);
+ assert(Math.abs(c.car.wheelTravel+c.car.odo)<1e-9);
+ const atWall=setup(()=>true);atWall.car.v=2;atWall.physics(1/120);
+ assert.equal(atWall.car.wheelTravel,0);
 });
 test('incline resists uphill pushing and assists downhill pushing without moving at rest',()=>{
  const flat=setup(),uphill=setup(),downhill=setup();
