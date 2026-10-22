@@ -13,8 +13,8 @@ base=os.environ.get('PARK_URL','http://127.0.0.1:8791')
 out=Path(os.environ.get('PARK_HOUSE_OUT',tempfile.mkdtemp(prefix='park-upside-down-')))
 out.mkdir(parents=True,exist_ok=True)
 report={};errors=[]
-query='calibrate=1&x=-31&z=-388&heading=-1.467&sound=0&grain=0'
-pose='__calibrationCamera={x:-31,z:-388,y:1.7,heading:-1.467,pitch:.12}'
+query='calibrate=1&x=-42&z=-372&heading=-.396&sound=0&grain=0'
+pose='__calibrationCamera={x:-42,z:-372,y:1.7,heading:-.396,pitch:.12}'
 
 def ready(page,url):
     page.goto(base+'/park.html?'+url)
@@ -95,6 +95,14 @@ with sync_playwright() as p:
     assert math.dist(start,end)>.1
     report['preview_moved_metres']=math.dist(start,end)
     check_gl(page)
+
+    report['collision_rotation']={}
+    for name,x,z,heading,blocked in [('freed_corner',-53.2,-390.6,-.95,False),('rotated_corner',-50.4,-384,-.95,True)]:
+        page.evaluate('p=>{__car.x=p.x;__car.z=p.z;__car.heading=p.h;__car.v=0;__car.steer=0;}',{'x':x,'z':z,'h':heading})
+        page.keyboard.down('w');page.wait_for_timeout(700);page.keyboard.up('w')
+        travelled=math.dist([x,z],page.evaluate('[__car.x,__car.z]'))
+        report['collision_rotation'][name]=travelled
+        assert travelled<.01 if blocked else travelled>.1,(name,travelled)
 
     mobile=browser.new_context(viewport={'width':390,'height':844},device_scale_factor=3,is_mobile=True,has_touch=True)
     phone=mobile.new_page();phone.on('pageerror',lambda e:errors.append(str(e)))

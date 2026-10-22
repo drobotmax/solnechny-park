@@ -3,8 +3,37 @@
 'use strict';
 const C={wood:[.31,.23,.23],roof:[.76,.18,.075],edge:[.88,.25,.12],white:[.91,.92,.89],
  glass:[.20,.27,.28],dark:[.16,.17,.18],soil:[.17,.15,.12],pot:[.67,.69,.65],gold:[.85,.66,.14]};
+function footprint(e){
+ // Clockwise quarter-turn about the mapped centre, facing the adjacent path.
+ return e.pts.map(([x,z])=>[e.cx-(z-e.cz),e.cz+(x-e.cx)]);
+}
+function inside(p,x,z){
+ let hit=false;
+ for(let i=0,j=p.length-1;i<p.length;j=i++)if((p[i][1]>z)!==(p[j][1]>z)&&x<(p[j][0]-p[i][0])*(z-p[i][1])/(p[j][1]-p[i][1])+p[i][0])hit=!hit;
+ return hit;
+}
+function nearBoundary(p,x,z,pad){
+ return p.some((a,i)=>{
+  const b=p[(i+1)%p.length],dx=b[0]-a[0],dz=b[1]-a[1];
+  const t=Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz)));
+  return Math.hypot(x-a[0]-t*dx,z-a[1]-t*dz)<=pad;
+ });
+}
+function applyGround(cats,park,e){
+ const rotated=footprint(e),both=e.pts.concat(rotated),pad=park.mpp*Math.SQRT2;
+ const xs=both.map(p=>p[0]),zs=both.map(p=>p[1]);
+ const x0=Math.max(0,Math.floor((Math.min(...xs)-pad-park.x0)/park.mpp));
+ const x1=Math.min(park.w-1,Math.ceil((Math.max(...xs)+pad-park.x0)/park.mpp));
+ const z0=Math.max(0,Math.floor((Math.min(...zs)-pad-park.z0)/park.mpp));
+ const z1=Math.min(park.h-1,Math.ceil((Math.max(...zs)+pad-park.z0)/park.mpp));
+ for(let iz=z0;iz<=z1;iz++)for(let ix=x0;ix<=x1;ix++){
+  const x=park.x0+(ix+.5)*park.mpp,z=park.z0+(iz+.5)*park.mpp,index=iz*park.w+ix;
+  if((cats[index]&31)===5&&(inside(e.pts,x,z)||nearBoundary(e.pts,x,z,pad)))cats[index]=(cats[index]&64)|11;
+  if(inside(rotated,x,z))cats[index]=(cats[index]&64)|5;
+ }
+}
 function frame(e){
- const [backRight,backLeft,left,right]=e.pts;
+ const [backRight,backLeft,left,right]=footprint(e);
  const width=Math.hypot(right[0]-left[0],right[1]-left[1]);
  const mid=[(left[0]+right[0])/2,(left[1]+right[1])/2];
  const depth=Math.hypot((backLeft[0]+backRight[0])/2-mid[0],(backLeft[1]+backRight[1])/2-mid[1]);
@@ -31,7 +60,7 @@ function build(g,e){
   for(const u of [-w/2,0,w/2])beam(p(u,y,.025),p(u,y+h,.025),u===0?.023:.045,C.white);
   for(const v of [y,y+h])beam(p(-w/2,v,.025),p(w/2,v,.025),.045,C.white);
  }
- // The original footprint carries the upper walls; the roof is below them.
+ // The rotated footprint carries the upper walls; the roof is below them.
  box(0,2.28,-D/2,W*2,4.27,D,C.wood,12);
  box(0,2.35,.20,2.65,4.20,.62,C.wood,12);
  const roofD=y=>.22-(2.30-y)*.25;
@@ -120,6 +149,6 @@ function build(g,e){
  // A short upside-down stair flight is visible at the upper right corner.
  for(let i=0;i<6;i++)box(W+.13,5.58+i*.15,-.08-i*.27,.36,.15,.28,C.white);
 }
-const api={frame,build};
+const api={frame,build,footprint,applyGround};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkUpsideDownHouse=api;
 })(typeof window!=='undefined'?window:globalThis);

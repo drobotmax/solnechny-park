@@ -10,10 +10,29 @@ test('upside-down house uses the mapped 2B footprint between the entrance pavili
  const west=all.find(e=>e.id==='b5'),east=all.find(e=>e.id==='b6');
  assert(west.cx<e.cx&&e.cx<east.cx);
  assert.equal(west.kind,'building');assert.equal(east.kind,'building');
- assert(f.front[0]>.9&&f.front[1]<0,'the long facade faces the open entrance street');
- for(const [x,d,index] of [[-f.width/2,0,2],[f.width/2,0,3],[-f.width/2,-f.depth,1],[f.width/2,-f.depth,0]]){
-  const p=f.at(x,0,d);assert(Math.hypot(p[0]-e.pts[index][0],p[2]-e.pts[index][1])<1e-8);
+ assert(f.front[0]>.39&&f.front[1]>.91,'the entrance faces southeast across the adjacent path');
+ const rotated=House.footprint(e);
+ for(let i=0;i<4;i++){
+  const a=e.pts[i].map((v,k)=>v-[e.cx,e.cz][k]),b=rotated[i].map((v,k)=>v-[e.cx,e.cz][k]);
+  assert(Math.abs(a[0]*b[0]+a[1]*b[1])<1e-8,'the house turns exactly 90 degrees about its centre');
+  assert(a[0]*b[1]-a[1]*b[0]>0,'the entrance turns toward the path');
+  assert(Math.abs(Math.hypot(...a)-Math.hypot(...b))<1e-8,'rotation keeps the original dimensions');
  }
+ for(const [x,d,index] of [[-f.width/2,0,2],[f.width/2,0,3],[-f.width/2,-f.depth,1],[f.width/2,-f.depth,0]]){
+  const p=f.at(x,0,d);assert(Math.hypot(p[0]-rotated[index][0],p[2]-rotated[index][1])<1e-8);
+ }
+});
+
+test('collision raster follows the rotated house and frees its former corners',()=>{
+ const e=Meshes.entries(park).find(e=>e.kind==='upsideDownHouse');
+ const grid={x0:-56.1,z0:-396.1,w:80,h:80,mpp:.2},cats=new Uint8Array(6400).fill(75);
+ const index=(x,z)=>Math.round((z+396)/.2)*grid.w+Math.round((x+56)/.2);
+ const oldCorner=index(-52.8,-390.6),newCorner=index(-50.4,-384),neighbour=index(-44.4,-392.4);
+ cats[oldCorner]=101;cats[neighbour]=69;
+ House.applyGround(cats,grid,e);
+ assert.equal(cats[oldCorner],75,'old solid/unreachable cell becomes a walkable forecourt');
+ assert.equal(cats[newCorner],69,'newly covered corner blocks the stroller');
+ assert.equal(cats[neighbour],69,'a nearby unrelated building is preserved');
 });
 
 test('red pitched surfaces stay below the wood walls and foundation cap',()=>{

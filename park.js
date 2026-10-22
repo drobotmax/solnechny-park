@@ -2346,14 +2346,14 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261022-upside1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261022-upside2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
     meshContacts=new Float32Array(meshEntries.filter(function(e){
       return ['building','bikeCafe','tutCoffee','ticketOffice','upsideDownHouse','transylvania','bumper','carousel','coaster'].indexOf(e.kind)>=0;
     }).flatMap(function(e){
-      var b=bbox(e.pts);return [e.cx,e.cz,Math.max(1,(b[2]-b[0])/2),Math.max(1,(b[3]-b[1])/2)];
+      var b=bbox(e.kind==='upsideDownHouse'?ParkUpsideDownHouse.footprint(e):e.pts);return [e.cx,e.cz,Math.max(1,(b[2]-b[0])/2),Math.max(1,(b[3]-b[1])/2)];
     }));
     park.scans = res[3].scans;
     // Replace the former guessed fountain and clear generated vegetation at
@@ -2385,6 +2385,7 @@
     var rgba = cx.getImageData(0, 0, park.w, park.h).data;
     cats = new Uint8Array(park.w * park.h);
     for (var i = 0; i < cats.length; i++) cats[i] = rgba[i * 4];
+    ParkUpsideDownHouse.applyGround(cats,park,upsideDownEntry);
     for(var z=-440;z<=-400;z+=park.mpp)for(var x=-22;x<=43;x+=park.mpp){
       var zone=ParkMeshes.landingZone(x,z);
       if(!zone)continue;
@@ -2538,8 +2539,8 @@
     if(new URLSearchParams(location.search).get('tour')==='details') visitDetails();
     var preview=new URLSearchParams(location.search).get('preview');
     if(preview==='upside-down-house'){
-      startGame('free');car.x=-25;car.z=-381;car.heading=-1.28;car.v=0;
-      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.03;cam.dist=canvas.width<canvas.height?8:6;cam.top=false;
+      startGame('free');car.x=-47;car.z=-375;car.heading=-.02;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.03;cam.dist=canvas.width<canvas.height?14:6;cam.top=false;
     }else if(preview==='transylvania'){
       startGame('free');car.x=-19.5;car.z=-315.0;car.heading=.94;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.03;cam.dist=canvas.width<canvas.height?11:6;cam.top=false;
