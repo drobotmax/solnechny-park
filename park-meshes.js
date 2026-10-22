@@ -39,6 +39,22 @@ function entries(park){
  .concat([{id:'plaza-stage',cx:stageCenter[0],cz:stageCenter[1],kind:'plazaStage',pts:plazaStageFootprint},
   {id:'entrance-landing',cx:10.6,cz:-419.9,kind:'bridgeLanding',pts:bridgeLandingAxis}]);
 }
+function forestEntries(trees){
+ const sectors=new Map();
+ for(const t of trees){
+  const ix=Math.floor(t[0]/64),iz=Math.floor(t[1]/64),id='forest:'+ix+','+iz;
+  if(!sectors.has(id))sectors.set(id,{id,cx:(ix+.5)*64,cz:(iz+.5)*64,kind:'forest',trees:[]});
+  sectors.get(id).trees.push(t);
+ }
+ return [...sectors.values()];
+}
+function bridgeEntries(park){
+ const road=park.bridges.find(b=>b.osm_id===27081408);
+ return park.bridges.filter(b=>b.osm_id===176130545||b.osm_id===176130547).map(b=>{
+  const c=center(b.pts);
+  return {id:'bridge:'+b.osm_id,cx:c[0],cz:c[1],kind:'bridgeRails',pts:b.pts,width:b.w,road:road.pts[0]};
+ });
+}
 function Geometry(){this.data=[];}
 Geometry.prototype.tri=function(a,b,c,color,mat){
  const u=b.map((v,i)=>v-a[i]),v=c.map((v,i)=>v-a[i]);
@@ -61,6 +77,52 @@ Geometry.prototype.beam=function(a,b,r,col,mat,sides=6){
  const ring=(p,k)=>p.map((n,i)=>n+r*(u[i]*Math.cos(k*2*Math.PI/sides)+v[i]*Math.sin(k*2*Math.PI/sides)));
  for(let i=0;i<sides;i++)this.quad(ring(a,i),ring(a,i+1),ring(b,i+1),ring(b,i),col,mat);
 };
+function forest(g,e){
+ for(const [x,z,h,cr] of e.trees){
+  const base=terrainHeight(x,z),height=h*.46,radius=.10+cr*.028;
+  const seed=Math.sin(x*12.9898+z*78.233)*43758.5453,angle=(seed-Math.floor(seed))*Math.PI*2;
+  const bark=Math.sin(x+z)>.72?[.54,.52,.46]:[.30,.25,.19];
+  const lean=[Math.cos(angle)*.28,Math.sin(angle)*.28];
+  const ring=(a,y,r)=>[x+Math.cos(a)*r+lean[0]*y/height,base+y,z+Math.sin(a)*r+lean[1]*y/height];
+  for(let i=0;i<8;i++){
+   const a=angle+i*Math.PI/4,b=angle+(i+1)*Math.PI/4;
+   g.quad(ring(b,0,radius*1.25),ring(a,0,radius*1.25),ring(a,height,radius*.45),ring(b,height,radius*.45),bark,5);
+  }
+  for(let i=0;i<3;i++){
+   const a=angle+i*Math.PI*2/3;
+   g.beam([x+lean[0]*.75,base+height*.75,z+lean[1]*.75],
+    [x+Math.cos(a)*cr*.55,base+h*(.58+i*.055),z+Math.sin(a)*cr*.55],radius*.43,bark,5,5);
+  }
+ }
+}
+function bridgeRails(g,e){
+ const p=e.pts,stone=[.63,.62,.57],white=[.89,.91,.87];
+ const a=p[0],b=p[1],length=Math.hypot(b[0]-a[0],b[1]-a[1]),nx=-(b[1]-a[1])/length,nz=(b[0]-a[0])/length;
+ const distance=side=>Math.hypot(a[0]+nx*e.width*.5*side-e.road[0],a[1]+nz*e.width*.5*side-e.road[1]);
+ const outer=distance(1)>distance(-1)?1:-1;
+ for(const side of [-1,1])for(let j=0;j<p.length-1;j++){
+  const from=p[j],to=p[j+1],len=Math.hypot(to[0]-from[0],to[1]-from[1]);
+  const ux=(to[0]-from[0])/len,uz=(to[1]-from[1])/len;
+  const at=(s,y,offset=0)=>{
+   const x=from[0]+ux*s-uz*(e.width*.5*side+offset),z=from[1]+uz*s+ux*(e.width*.5*side+offset);
+   return [x,terrainHeight(x,z)+y,z];
+  };
+  for(let s=0;s<len;s+=1.5){
+   const end=Math.min(len,s+1.5),half=side===outer?.16:.10,top=side===outer?.34:.22;
+   g.quad(at(s,.02,-half),at(end,.02,-half),at(end,top,-half),at(s,top,-half),stone,1);
+   g.quad(at(end,.02,half),at(s,.02,half),at(s,top,half),at(end,top,half),stone,1);
+   g.quad(at(s,top,-half),at(end,top,-half),at(end,top,half),at(s,top,half),white,1);
+   if(side===outer)g.beam(at(s,1.03),at(end,1.03),.045,white,2,6);
+  }
+  if(side!==outer)continue;
+  for(let s=.1;s<len;s+=3.2)g.beam(at(s,.33),at(s,1.1),.16,stone,1,4);
+  for(let s=.8;s<len-.7;s+=1.55)for(let k=0;k<16;k++){
+   const t=k*Math.PI/8,t1=(k+1)*Math.PI/8;
+   g.beam(at(s+Math.cos(t)*.63,.66+Math.sin(t)*.32),
+    at(s+Math.cos(t1)*.63,.66+Math.sin(t1)*.32),.026,white,2,5);
+  }
+ }
+}
 function edgeFrame(p,i){const a=p[i],b=p[(i+1)%p.length],len=Math.hypot(b[0]-a[0],b[1]-a[1]);return {a,b,len,ux:(b[0]-a[0])/len,uz:(b[1]-a[1])/len};}
 function building(g,e){
  const p=e.pts,h=e.h,c=[e.cx,e.cz];
@@ -427,11 +489,11 @@ function pendulum(g,e){
  }
 }
 function build(e){
- const g=new Geometry();({building,bikeCafe,tutCoffee,bridgeLanding,plazaStage,bumper,carousel,coaster,spinner,train,swingTower,pendulum}[e.kind])(g,e);
+ const g=new Geometry();({building,bikeCafe,tutCoffee,bridgeLanding,plazaStage,bumper,carousel,coaster,spinner,train,swingTower,pendulum,forest,bridgeRails}[e.kind])(g,e);
  const data=new Float32Array(g.data);let radius=0;
  for(let i=0;i<data.length;i+=10)radius=Math.max(radius,Math.hypot(data[i]-e.cx,data[i+1]-5,data[i+2]-e.cz));
  return {data,n:data.length/10,center:[e.cx,5,e.cz],radius};
 }
-const api={entries,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec};
+const api={entries,forestEntries,bridgeEntries,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkMeshes=api;
 })(typeof window!=='undefined'?window:globalThis);

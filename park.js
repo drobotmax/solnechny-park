@@ -47,7 +47,7 @@
     mono: ['000000', 'ffffff'],
   };
   var SPREAD = { pico8: 0.18, gameboy: 0.3, cga: 0.45, mono: 0.6 };
-  var DEFAULTS = { pix: 1, speedMul: 1, palette: 'source', accent: '#e4342a', dither: false, night: false, grain: true, mini: true, sound: true };
+  var DEFAULTS = { pix: 1, speedMul: 1, palette: 'source', accent: '#e4342a', dither: false, natural: true, night: false, grain: false, mini: true, sound: true };
   var state = Object.assign({}, DEFAULTS, readSaved(), readQuery());
   var doomMode = false, cheatBuffer = '', cheatAt = 0, doomHorde = null, doomCorpses = [], doomKills = 0, doomGunGPU = null, doomBarrelGPU = null, doomFlameGPU = null;
   var doomMusic = new Audio('assets/audio/at-dooms-gate-8bit.mp3');
@@ -79,7 +79,7 @@
   var stage = document.getElementById('stage');
   var canvas = document.getElementById('c');
   var statusEl = document.getElementById('status');
-  var gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: false });
+  var gl = canvas.getContext('webgl2', { antialias: true, alpha: false, preserveDrawingBuffer: false });
   if (!gl) { statusEl.textContent = 'WebGL2 недоступен'; return; }
 
   function readSaved() { try { return JSON.parse(localStorage.getItem('pixel-park') || '{}'); } catch (e) { return {}; } }
@@ -102,7 +102,7 @@
     'uniform int uMode, uPalN;\n' +
     'uniform vec3 uAccent, uBg;\n' +
     'uniform vec3 uPal[16];\n' +
-    'uniform float uDither, uSpread;\n' +
+    'uniform float uDither, uSpread, uNatural, uDay;\n' +
     'const float B[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);\n' +
     'float bayer() { ivec2 q = ivec2(gl_FragCoord.xy) & 3; return (B[q.x + 4 * q.y] + 0.5) / 16.0; }\n' +
     'vec3 colorize(vec3 c, float fog) {\n' +
@@ -135,28 +135,58 @@
     'uniform bool uInstanced;\n' +
     'uniform float uDensity;\n' +
     'uniform mat4 uModel, uView, uProj;\n' +
-    'uniform float uFocal, uFogNear, uFogFar, uMaxPt, uLight, uTime, uAnim;\n' +
+    'uniform float uFocal, uFogNear, uFogFar, uMaxPt, uLight, uTime, uAnim, uNatural, uRound;\n' +
     'out vec3 vCol;\n' +
-    'out float vFog;\n' +
+    'out float vFog, vOrganic, vPointSize, vSeed;\n' +
     'void main() {\n' +
     '  vec3 p = aPos;\n' +
+    '  vOrganic = aCol.a > 0.9 && aCol.a < 0.98 ? 1.0 : 0.0;\n' +
+    '  vSeed = fract(sin(dot(aPos.xz,vec2(12.9898,78.233)))*43758.5453);\n' +
+    '  if (vOrganic > 0.5 && uNatural > 0.5) {\n' +
+    '    float wind = sin(uTime * 1.1 + aPos.y * .7 + aPos.x * .3) * .045;\n' +
+    '    p.xz += vec2(wind, wind * .6) * smoothstep(3., 15., aPos.y);\n' +
+    '  }\n' +
     '  if (uAnim > 0.5) {\n' +
     '    float ph = fract(aPos.y + uTime * 0.55), reach = length(aPos.xz);\n' +
     '    p = vec3(aPos.x * ph, 0.6 + (5.5 - reach) * 4.0 * ph * (1.0 - ph), aPos.z * ph);\n' +
     '  }\n' +
     '  vec4 v = uView * (uInstanced ? aInstance : uModel) * vec4(p, 1.0);\n' +
     '  gl_Position = uProj * v;\n' +
-    '  gl_PointSize = clamp(2.0 * aSize * uDensity * uFocal / max(-v.z, 1e-3), 1.0, uMaxPt);\n' +
+    '  gl_PointSize = clamp(2.0 * aSize * uDensity * uFocal / max(-v.z, 1e-3) * mix(1., 1.18, uNatural * max(vOrganic,uRound)), 1.0, uMaxPt);\n' +
+    '  vPointSize = gl_PointSize;\n' +
     '  float em = aCol.a < 0.75 ? 1.0 : 0.0;\n' +
     '  vCol = aCol.rgb * mix(uLight, 1.15, em);\n' +
     '  vFog = smoothstep(uFogNear, uFogFar, -v.z) * (1.0 - 0.6 * em);\n' +
     '}\n';
   var PTS_FS = '#version 300 es\n' +
-    'precision mediump float;\n' +
+    'precision highp float;\n' +
     'in vec3 vCol;\n' +
-    'in float vFog;\n' + COLOR +
+    'in float vFog, vOrganic, vPointSize, vSeed;\n' +
+    'uniform float uRound;\n' +
+    'uniform sampler2D uFoliage;\n' +
+    'uniform vec3 uPointSun;\n' + COLOR +
     'out vec4 o;\n' +
-    'void main() { o = vec4(colorize(vCol, vFog), 1.0); }\n';
+    'void main() {\n' +
+    '  vec3 c = vCol; float coverage = 1.;\n' +
+    '  if (uNatural > .5 && vPointSize > 1.5 && max(vOrganic,uRound) > .5) {\n' +
+    '    vec2 q = gl_PointCoord * 2. - 1.; float r = dot(q,q);\n' +
+    '    float edge = max(.025, 2. / vPointSize);\n' +
+    '    coverage = 1. - smoothstep(1. - edge, 1., r);\n' +
+    '    if (coverage < .05) discard;\n' +
+    '    if (vOrganic > .5) {\n' +
+    '      float angle = atan(q.y,q.x);\n' +
+    '      float outline = r * (1. + .13 * sin(angle * 7. + vSeed * 30.));\n' +
+    '      coverage *= 1. - smoothstep(.78,1.,outline);\n' +
+    '      float a = vSeed * 6.28, ca = cos(a), sa = sin(a);\n' +
+    '      vec2 leaf = texture(uFoliage,mat2(ca,-sa,sa,ca)*q*.5+.5).rg;\n' +
+    '      coverage *= mix(1.,leaf.r,smoothstep(3.,14.,vPointSize));\n' +
+    '      vec3 n = vec3(q.x,-q.y,sqrt(max(0.,1.-r)));\n' +
+    '      c *= (.94 + .16 * max(0.,dot(n,uPointSun))) * mix(1.,.74 + leaf.g * .4,smoothstep(3.,14.,vPointSize));\n' +
+    '    }\n' +
+    '    if (coverage < .05) discard;\n' +
+    '  }\n' +
+    '  o = vec4(colorize(c, vFog), coverage);\n' +
+    '}\n';
 
   var GROUND_VS = '#version 300 es\n' +
     'layout(location = 0) in vec2 aXZ;\n' +
@@ -186,11 +216,13 @@
     in float vDist;
     in float vRampHeight;
     uniform int uRampPass;
-    uniform sampler2D uGround,uAlbedo;
+    uniform sampler2D uGround,uAlbedo,uShadow;
+    uniform vec3 uEye;
+    uniform vec4 uStroller;
     uniform vec4 uContact[16],uFrame;
     uniform int uContactN;
     uniform float uTime,uFogNear,uFogFar,uLight;
-  ` + COLOR + `
+  ` + COLOR + ParkAtmosphere.glsl + `
     out vec4 o;
     float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
     int category(vec2 uv){return int(texture(uGround,uv).r*255.+.5)&31;}
@@ -243,6 +275,29 @@
       }else if(cat==4){
         float w=sin(vXZ.x*.45+uTime*.9)*sin(vXZ.y*.6-uTime*1.2);
         c=mix(vec3(.17,.32,.30),sat,.35)+(w>.82?vec3(.18):vec3(0.));
+        if(uNatural>.5){
+          vec3 v=normalize(uEye-vec3(vXZ.x,0.,vXZ.y));
+          float distortion=skyNoise(vXZ*.13)*3.;
+          float a=dot(vXZ,vec2(.74,.32))*2.1+uTime*.75+distortion;
+          float b=dot(vXZ,vec2(-.38,.93))*3.7-uTime*1.1+distortion*.7;
+          float ripple=dot(vXZ,vec2(.31,-.84))*6.2+uTime*1.3;
+          float detail=1.-smoothstep(45.,125.,vDist);
+          vec3 n=normalize(vec3((cos(a)*.013+cos(b)*.009+sin(ripple)*.006)*detail,1.,
+            (sin(a)*.016+cos(b)*.007+cos(ripple)*.006)*detail));
+          float fresnel=.025+.975*pow(1.-max(0.,dot(n,v)),5.);
+          vec3 reflection=daylightSky(reflect(-v,n),uTime);
+          reflection=mix(vec3(.035,.055,.075),reflection,uDay);
+          vec3 deep=mix(vec3(.08,.23,.21),sat,.15);
+          c=mix(deep,reflection,.22+.75*fresnel);
+          float glint=pow(max(0.,dot(n,normalize(v+SUN))),190.);
+          c+=vec3(1.,.88,.64)*glint*.8*uDay*detail;
+          vec2 off=vec2(1.2)/uFrame.zw;
+          float shore=(category(uv+vec2(off.x,0.))!=4?1.:0.)+
+            (category(uv-vec2(off.x,0.))!=4?1.:0.)+
+            (category(uv+vec2(0.,off.y))!=4?1.:0.)+
+            (category(uv-vec2(0.,off.y))!=4?1.:0.);
+          c=mix(c,vec3(.19,.30,.23),min(1.,shore)*.28);
+        }
       }else if(cat==8){
         c=mix(vec3(.26,.25,.15),sat,.25)*(.85+.3*h*near);
         if(h>.88)c=mix(c,h>.96?vec3(.78,.55,.22):vec3(.52,.40,.20),near*.6);
@@ -265,6 +320,15 @@
       }
       float contact=0.;for(int i=0;i<16;i++){if(i>=uContactN)break;vec2 d=(vXZ-uContact[i].xy)/uContact[i].zw;contact=max(contact,(1.-smoothstep(.65,1.3,length(d)))*.20);}
       c*=1.-contact;
+      if(uNatural>.5&&cat!=4){
+        float shade=texture(uShadow,uv).r;
+        float dapple=.78+.22*skyNoise(vXZ*1.7+vec2(sin(uTime*.5)*.12,0.));
+        c*=mix(vec3(1.04,1.02,.97),vec3(.54,.63,.76),shade*dapple*uDay);
+        vec2 d=vXZ-uStroller.xy;
+        d=mat2(cos(uStroller.z),-sin(uStroller.z),sin(uStroller.z),cos(uStroller.z))*d;
+        float strollerShade=(1.-smoothstep(.35,1.,length(d/vec2(.42,.78))))*.27;
+        c*=1.-strollerShade;
+      }
       o=vec4(colorize(c*uLight,smoothstep(uFogNear,uFogFar,vDist)),1.);
     }
   `;
@@ -300,6 +364,10 @@
       if(vMaterial==1.)c*=mix(1.,.94+.12*noise(vPos*30.),detail);
       if(vMaterial==4.)c*=mix(1.,.88+.12*step(.08,fract(vPos.x*2.+vPos.z*.25)),detail);
       if(vMaterial==2.)shade+=.12*pow(max(0.,dot(reflect(-light,n),normalize(uEye-vPos))),20.);
+      if(vMaterial==5.){
+        float grain=noise(vec3(vPos.x*45.,vPos.y*2.,vPos.z*45.));
+        c*=mix(1.,.78+.30*grain,detail);
+      }
       if(vMaterial==3.){
         float f=pow(1.-abs(dot(n,normalize(uEye-vPos))),3.);
         c=mix(c,vec3(.61,.72,.77),.22+f*.42);
@@ -323,13 +391,21 @@
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
     var u = { prog: p };
-    names.concat(['uMode', 'uPalN', 'uAccent', 'uBg', 'uPal', 'uDither', 'uSpread', 'uView', 'uProj', 'uFogNear', 'uFogFar', 'uLight', 'uTime'])
+    names.concat(['uMode', 'uPalN', 'uAccent', 'uBg', 'uPal', 'uDither', 'uSpread', 'uView', 'uProj', 'uFogNear', 'uFogFar', 'uLight', 'uTime', 'uNatural', 'uDay'])
       .forEach(function (k) { u[k] = gl.getUniformLocation(p, k); });
     return u;
   }
-  var P = program(PTS_VS, PTS_FS, ['uModel', 'uFocal', 'uMaxPt', 'uAnim', 'uInstanced', 'uDensity']);
-  var G = program(GROUND_VS, GROUND_FS, ['uGround', 'uAlbedo', 'uFrame', 'uContact', 'uContactN', 'uRampFrame', 'uRampShape', 'uRampPass']);
+  var P = program(PTS_VS, PTS_FS, ['uModel', 'uFocal', 'uMaxPt', 'uAnim', 'uInstanced', 'uDensity', 'uPointSun', 'uRound', 'uFoliage']);
+  var G = program(GROUND_VS, GROUND_FS, ['uGround', 'uAlbedo', 'uShadow', 'uEye', 'uStroller', 'uFrame', 'uContact', 'uContactN', 'uRampFrame', 'uRampShape', 'uRampPass']);
   var M = program(MESH_VS, MESH_FS, ['uEye']);
+  var S = program(ParkAtmosphere.skyVS, ParkAtmosphere.skyFS + COLOR + `
+    void main(){
+      vec3 ray=normalize(uForward+vScreen.x*uAspect*uTanFov*uRight+vScreen.y*uTanFov*uUp);
+      vec3 c=mix(vec3(.018,.026,.044),daylightSky(ray,uTime),uDay);
+      o=vec4(colorize(c,0.),1.);
+    }
+  `, ['uForward','uRight','uUp','uAspect','uTanFov']);
+  var skyVAO=gl.createVertexArray();
   var meshes=null, meshContacts=null;
 
   // Point cloud under construction: position, RGBA, world size.
@@ -338,19 +414,19 @@
   // drawn: 3+ million points in one call is too much for a phone.
   var CHUNK = 64;
   function ChunkedCloud() { this.chunks = new Map(); }
-  ChunkedCloud.prototype.add = function (x, y, z, c, s, emissive) {
+  ChunkedCloud.prototype.add = function (x, y, z, c, s, emissive, organic) {
     var k = Math.floor(x / CHUNK) + ',' + Math.floor(z / CHUNK), ch = this.chunks.get(k);
     if (!ch) { ch = new Cloud(); ch.cx = (Math.floor(x / CHUNK) + 0.5) * CHUNK; ch.cz = (Math.floor(z / CHUNK) + 0.5) * CHUNK; this.chunks.set(k, ch); }
-    ch.add(x, y + ParkMeshes.terrainHeight(x,z), z, c, s, emissive);
+    ch.add(x, y + ParkMeshes.terrainHeight(x,z), z, c, s, emissive, organic);
   };
   ChunkedCloud.prototype.upload = function () {
     var out = [], n = 0;
     this.chunks.forEach(function (ch) { var g = ch.upload(); g.cx = ch.cx; g.cz = ch.cz; out.push(g); n += g.n; });
     return { chunks: out, n: n };
   };
-  Cloud.prototype.add = function (x, y, z, c, s, emissive) {
+  Cloud.prototype.add = function (x, y, z, c, s, emissive, organic) {
     this.pos.push(x, y, z);
-    this.col.push(clamp255(c[0]), clamp255(c[1]), clamp255(c[2]), emissive ? 128 : 255);
+    this.col.push(clamp255(c[0]), clamp255(c[1]), clamp255(c[2]), emissive ? 128 : organic ? 240 : 255);
     this.size.push(s);
   };
   Cloud.prototype.upload = function () {
@@ -589,8 +665,8 @@
       var taper = tr * (1 - .45 * y / top);
       for (var k = 0; k < (tr > .3 ? 4 : 1); k++) {
         var angle = r() * Math.PI * 2;
-        cl.add(x + Math.cos(angle)*taper*.5, y, z + Math.sin(angle)*taper*.5,
-          mul(bark, .78 + .3*r()), Math.max(.07,taper), false);
+        // Preserve seeded choices; solid tapered trunks are streamed as meshes.
+        r();
       }
     }
     var pick=r(),acc=0,base=CROWNS[0][0];
@@ -603,19 +679,18 @@
       var lx=Math.cos(a)*reach,lz=Math.sin(a)*reach;
       lobes.push([lx,cy,lz,cr*(slender?.48:.64),h*(slender?.23:.26)]);
       // A few visible forks give depth without bloating every streamed sector.
-      if(j<3)for(var t=0;t<=1;t+=.12)cl.add(x+lx*t,top+(cy-top)*t,z+lz*t,
-        mul(bark,.85),Math.max(.055,tr*(1-t*.65)),false);
+      // Branches share the same solid mesh sector as the trunk.
     }
     lobes.push([0,h*.77,0,cr*(slender?.48:.58),h*.24]);
-    var n=Math.round(50+cr*16);
+    var n=Math.round(110+cr*38);
     for(var q=0;q<n;q++){
       var l=lobes[q%lobes.length],u=r()*2-1,th=r()*Math.PI*2;
       var rad=.60+.40*Math.cbrt(r()), ss=Math.sqrt(1-u*u);
       var dx=ss*Math.cos(th),dz=ss*Math.sin(th);
       var shade=(.68+.35*Math.max(0,-.45*dx+.82*u-.32*dz))*(.9+.2*r());
-      var leafSize=Math.max(.30,Math.min(.85,cr*.15))*(.8+.4*r());
+      var leafSize=Math.max(.20,Math.min(.54,cr*.10))*(.8+.4*r());
       cl.add(x+l[0]+dx*rad*l[3],l[1]+u*rad*l[4],z+l[2]+dz*rad*l[3],
-        mul(base,shade),leafSize,false);
+        mul(base,shade),leafSize,false,true);
     }
   }
 
@@ -642,7 +717,7 @@
         var dx = Math.cos(angle) * ring, dz = Math.sin(angle) * ring;
         cl.add(x + tip[0] + dx * 5.2 * fill, tip[1] + u * 3.2 * fill,
                z + tip[2] + dz * 5.2 * fill,
-               mul([67, 107, 43], 0.72 + r() * 0.4), 0.52 + r() * 0.3, false);
+               mul([67, 107, 43], 0.72 + r() * 0.4), 0.52 + r() * 0.3, false, true);
       }
     });
     var fence = [[x-2.5,z-2.5],[x+2.5,z-2.5],[x+2.5,z+2.5],[x-2.5,z+2.5],[x-2.5,z-2.5]];
@@ -708,6 +783,7 @@
       // OSM maps the entrance road and its two sidewalks as three ways.
       // The roadside rails belong to the sidewalks, not to a second road deck.
       if (b.osm_id === 27081408) return;
+      if (b.osm_id === 176130545 || b.osm_id === 176130547) return; // Solid entrance rails.
       var p = b.pts;
       var entranceWalk = b.osm_id === 176130545 || b.osm_id === 176130547;
       var outerSide = 0;
@@ -1002,7 +1078,7 @@
     return false;
   }
 
-  var park = null, cats = null, groundTex = null, albedoTex = null, groundVAO = null, rampVAO = null, rampVertexCount = 0, world = null, stroller = null;
+  var park = null, cats = null, groundTex = null, albedoTex = null, shadowTex = null, foliageTex = null, groundVAO = null, rampVAO = null, rampVertexCount = 0, world = null, stroller = null;
   var ferris = null, jets = null, bottleGPU = null;
   var capturedScans = [];
   var gulls = { birds: [] }, gullGPU = null, gullWingGPU = null, nextGullCry = 0;
@@ -1582,8 +1658,10 @@
 
   function place() {
     var w = stage.clientWidth, h = stage.clientHeight;
-    canvas.width = Math.max(1, Math.ceil(w / state.pix));
-    canvas.height = Math.max(1, Math.ceil(h / state.pix));
+    var scale = state.natural && state.pix === 1 ? Math.min(devicePixelRatio || 1, 1.5) : 1;
+    canvas.width = Math.max(1, Math.ceil(w * scale / state.pix));
+    canvas.height = Math.max(1, Math.ceil(h * scale / state.pix));
+    canvas.style.imageRendering = state.pix > 1 ? 'pixelated' : 'auto';
     gl.viewport(0, 0, canvas.width, canvas.height);
   }
   function colorUniforms(u) {
@@ -1599,9 +1677,11 @@
       gl.uniform1f(u.uSpread, state.dither ? SPREAD[state.palette] : 0);
     }
     gl.uniform1f(u.uDither, state.dither ? 1 : 0);
+    gl.uniform1f(u.uNatural, state.natural ? 1 : 0);
+    gl.uniform1f(u.uDay, !state.night && !doomMode ? 1 : 0);
     gl.uniform1f(u.uLight, doomMode ? 0.65 : state.night ? 0.5 : 1);
   }
-  function bgColor() { if (doomMode) return [0.09, 0.004, 0.003]; return state.night || state.palette === 'accent' ? [0x0a / 255, 0x0a / 255, 0x0a / 255] : [0.61, 0.74, 0.86]; }
+  function bgColor() { if (doomMode) return [0.09, 0.004, 0.003]; return state.night || state.palette === 'accent' ? [0x0a / 255, 0x0a / 255, 0x0a / 255] : state.natural ? [.76,.83,.87] : [0.61, 0.74, 0.86]; }
   function clearColor() {
     var c = bgColor();
     if (doomMode) return c;
@@ -1650,6 +1730,15 @@
     gl.clearColor(cc[0], cc[1], cc[2], 1);
     gl.enable(gl.DEPTH_TEST);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if(state.natural){
+      gl.disable(gl.DEPTH_TEST);gl.useProgram(S.prog);colorUniforms(S);
+      gl.uniform3f(S.uRight,view[0],view[4],view[8]);
+      gl.uniform3f(S.uUp,view[1],view[5],view[9]);
+      gl.uniform3f(S.uForward,-view[2],-view[6],-view[10]);
+      gl.uniform1f(S.uAspect,canvas.width/canvas.height);gl.uniform1f(S.uTanFov,Math.tan(fov/2));
+      gl.uniform1f(S.uTime,time);gl.bindVertexArray(skyVAO);gl.drawArrays(gl.TRIANGLES,0,3);
+      gl.enable(gl.DEPTH_TEST);calls++;
+    }
 
     gl.useProgram(G.prog);
     colorUniforms(G);
@@ -1659,8 +1748,11 @@
     gl.uniform4f(G.uFrame, park.x0, park.z0, park.w * park.mpp, park.h * park.mpp);
     gl.uniform1f(G.uTime, time);
     gl.uniform1f(G.uFogNear, fogNear); gl.uniform1f(G.uFogFar, fogFar);
+    gl.uniform3fv(G.uEye,eye);
+    gl.uniform4f(G.uStroller,car.x,car.z,car.heading,0);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, groundTex); gl.uniform1i(G.uGround, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, albedoTex); gl.uniform1i(G.uAlbedo, 1);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, shadowTex); gl.uniform1i(G.uShadow, 2);
     var slope=ParkMeshes.terrainSpec;
     gl.uniform4f(G.uRampFrame,slope.anchor[0],slope.anchor[1],slope.direction[0],slope.direction[1]);
     gl.uniform4f(G.uRampShape,slope.cityS,slope.parkS,slope.deckHeight,0);
@@ -1685,6 +1777,12 @@
 
     gl.useProgram(P.prog);
     colorUniforms(P);
+    gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,foliageTex);gl.uniform1i(P.uFoliage,3);
+    if(state.natural)gl.enable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+    gl.uniform3f(P.uPointSun,
+      view[0]*-.45+view[4]*.82+view[8]*-.32,
+      view[1]*-.45+view[5]*.82+view[9]*-.32,
+      view[2]*-.45+view[6]*.82+view[10]*-.32);
     gl.uniformMatrix4fv(P.uView, false, view);
     gl.uniformMatrix4fv(P.uProj, false, proj);
     gl.uniform1f(P.uFocal, focal);
@@ -1700,6 +1798,7 @@
       var count=Math.ceil(c.n/stride);
       submitted += count;
       if (!optimized || animated) {
+        gl.uniform1f(P.uRound,maxPt<=14?1:0);
         gl.uniform1i(P.uInstanced,0); gl.uniform1f(P.uDensity,Math.sqrt(stride));
         gl.uniform1f(P.uMaxPt,maxPt); gl.uniformMatrix4fv(P.uModel,false,m);
         gl.bindVertexArray(c.vaos[stride]); gl.drawArrays(gl.POINTS,0,count); calls++; return;
@@ -1716,6 +1815,7 @@
         gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(batch.matrices),gl.DYNAMIC_DRAW);
         for(var i=0;i<4;i++) { gl.enableVertexAttribArray(3+i); gl.vertexAttribPointer(3+i,4,gl.FLOAT,false,64,i*16); gl.vertexAttribDivisor(3+i,1); }
         gl.uniform1f(P.uDensity,Math.sqrt(batch.stride)); gl.uniform1f(P.uMaxPt,batch.maxPt);
+        gl.uniform1f(P.uRound,batch.maxPt<=14?1:0);
         gl.drawArraysInstanced(gl.POINTS,0,Math.ceil(c.n/batch.stride),batch.matrices.length/16); calls++;
         for(var i=0;i<4;i++) {gl.disableVertexAttribArray(3+i);gl.vertexAttribDivisor(3+i,0);}
       });
@@ -1723,6 +1823,7 @@
     }
     var reach = fogFar + CHUNK * 0.75;
     gl.uniform1f(P.uMaxPt, 48);
+    gl.uniform1f(P.uRound,0);
     gl.uniformMatrix4fv(P.uModel, false, IDENT);
     world.update(eye[0],eye[2],fogFar+CHUNK*1.5);
     window.__stats.streaming=world.stats();
@@ -1876,6 +1977,7 @@
       });
     }
     flushClouds();
+    gl.disable(gl.SAMPLE_ALPHA_TO_COVERAGE);
     window.__stats.drawnPoints=submitted; window.__stats.drawCalls=calls;
     window.__stats.renderCpuMs=+(performance.now()-renderStart).toFixed(2);
     gl.bindVertexArray(null);
@@ -2134,6 +2236,7 @@
     $('speedMul').value = state.speedMul; $('speedMulV').textContent = '×' + Number(state.speedMul).toFixed(1);
     $('palette').value = state.palette;
     $('dither').checked = state.dither;
+    $('natural').checked = state.natural;
     $('night').checked = state.night;
     $('grainOn').checked = state.grain;
     $('miniOn').checked = state.mini;
@@ -2144,7 +2247,7 @@
   function bind(id, key, read) {
     $(id).addEventListener('input', function (e) {
       state[key] = read(e.target);
-      if (key === 'pix') place();
+      if (key === 'pix' || key === 'natural') place();
       if (key === 'sound' && state.sound) audio();
       if (key === 'sound' && !state.sound && duckGain) duckGain.gain.value = 0;
       syncDoomMusic();
@@ -2156,6 +2259,7 @@
   bind('speedMul', 'speedMul', function (t) { return Number(t.value); });
   bind('palette', 'palette', function (t) { return t.value; });
   bind('dither', 'dither', function (t) { return t.checked; });
+  bind('natural', 'natural', function (t) { return t.checked; });
   bind('night', 'night', function (t) { return t.checked; });
   bind('grainOn', 'grain', function (t) { return t.checked; });
   bind('miniOn', 'mini', function (t) { return t.checked; });
@@ -2200,11 +2304,10 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261021-daylight-asphalt1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261022-natural1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
-    meshes=new ParkStreaming.Stream(meshEntries,uploadMesh,releaseMesh,2);
     meshContacts=new Float32Array(meshEntries.filter(function(e){
       return ['building','bikeCafe','tutCoffee','bumper','carousel','coaster'].indexOf(e.kind)>=0;
     }).flatMap(function(e){
@@ -2223,6 +2326,7 @@
       return !park.scans.some(function (scan) { return Math.hypot(tree[0] - scan.at[0], tree[1] - scan.at[1]) < 9; }) &&
              !oakSites.some(function (oak) { return Math.hypot(tree[0] - oak.at[0], tree[1] - oak.at[1]) < 7.5; });
     });
+    meshes=new ParkStreaming.Stream(meshEntries.concat(ParkMeshes.forestEntries(park.trees),ParkMeshes.bridgeEntries(park)),uploadMesh,releaseMesh,2);
     var stageFootprint=meshEntries.find(function(e){return e.kind==='plazaStage';}).pts;
     park.props = park.props.filter(function (prop) {
       return !inside(stageFootprint,prop[1],prop[2]) &&
@@ -2267,6 +2371,16 @@
     }
     groundTex = texture(0, gl.R8, gl.RED, park.w, park.h, cats);
     albedoTex = texture(1, gl.RGB8, gl.RGB, 0, 0, null, res[2]);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.generateMipmap(gl.TEXTURE_2D);
+    var shade=ParkAtmosphere.shadowMap(park,park.trees.concat(oakSites.map(function(o){return [o.at[0],o.at[1],22,9];})));
+    shadowTex=texture(2,gl.R8,gl.RED,shade.width,shade.height,shade.data);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    var leaves=ParkAtmosphere.foliageMask();
+    foliageTex=texture(3,gl.RG8,gl.RG,leaves.width,leaves.height,leaves.data);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.generateMipmap(gl.TEXTURE_2D);
     rgba=null; cv.width=cv.height=1; res[1]=res[2]=null;
 
     var X0 = park.x0, Z0 = park.z0, X1 = park.x0 + park.w * park.mpp, Z1 = park.z0 + park.h * park.mpp;

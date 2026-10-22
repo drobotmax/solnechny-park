@@ -10,7 +10,7 @@
   body { font: 12px/1.4 ui-monospace, 'SF Mono', Menlo, monospace; -webkit-user-select: none; user-select: none; }
   #stage { position: fixed; inset: 0; cursor: grab; touch-action: none; }
   #stage.drag { cursor: grabbing; }
-  canvas#c { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; opacity: 0; transition: opacity 0.8s ease-out; }
+  canvas#c { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 0.8s ease-out; }
   #grain { position: absolute; inset: 0; pointer-events: none;
     background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.5) 100%), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     opacity: 0.18; }
@@ -113,6 +113,7 @@
     <option value="mono">1 бит</option>
   </select></label>
   <label>Дизеринг <input id="dither" type="checkbox"></label>
+  <label>Объём и свет <input id="natural" type="checkbox"></label>
   <label>Ночь <input id="night" type="checkbox"></label>
   <label>Зерно <input id="grainOn" type="checkbox"></label>
   <label>Карта <input id="miniOn" type="checkbox"></label>
@@ -150,11 +151,12 @@
 <script src="forest-birds.js?v=20261021-jays"></script>
 <script src="gulls.js?v=20261021-jays"></script>
 <script src="dogs.js?v=20261019-small-dogs"></script>
-<script src="park-meshes.js?v=20261021-plaza-layout1"></script>
+<script src="park-meshes.js?v=20261022-natural1"></script>
+<script src="park-atmosphere.js?v=20261022-natural1"></script>
 <script src="park-performance.js"></script>
 <script src="park-streaming.js"></script>
 <script src="small-wildlife.js?v=20261021-small-animals"></script>
 <script src="jay-voice.js?v=20261021-sonogram"></script>
-<script src="park.js?v=20261021-daylight-asphalt1"></script>
+<script src="park.js?v=20261022-natural1"></script>
 </body>
 </html>
