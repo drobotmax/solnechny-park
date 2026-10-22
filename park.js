@@ -381,6 +381,20 @@
         shade=.68+.32*max(0.,dot(n,light));
         c+=vec3(.16)*pow(max(0.,dot(reflect(-light,n),normalize(uEye-vPos))),36.)*uDay;
       }
+      if(vMaterial==11.){
+        vec3 across=normalize(vec3(n.z,0.,-n.x));
+        float u=dot(vPos,across),wave=sin(u*19.);
+        float joint=1.-smoothstep(.015,.055,abs(fract(vPos.y*4.+wave*.055)-.5));
+        c*=mix(1.,.96+.04*wave-joint*.22,detail);
+        vec3 roofNormal=normalize(n+across*cos(u*19.)*.10*detail);
+        shade=.64+.36*max(0.,dot(roofNormal,light));
+      }
+      if(vMaterial==12.){
+        float board=fract(vPos.y*7.5),fade=1.-smoothstep(.08,.20,fwidth(vPos.y)*7.5);
+        float groove=1.-smoothstep(.018,.070,abs(board-.5));
+        c*=1.-groove*.28*detail*fade;
+        c*=mix(1.,.94+.09*noise(vec3(vPos.x*8.,vPos.y*160.,vPos.z*8.)),detail*.6);
+      }
       if(vMaterial==7.)shade=.78+.22*max(0.,dot(n,light));
       if(vMaterial==8.){
         vec3 v=normalize(uEye-vPos);
@@ -760,8 +774,8 @@
     var WALLS = [[214, 200, 176], [190, 176, 160], [222, 216, 204], [176, 150, 120], [200, 190, 200]], ROOFS = [[120, 70, 60], [90, 90, 96], [140, 100, 80]];
     park.buildings.forEach(function (b, index) {
       if(ParkMeshes.buildingIds.indexOf(index)!==-1){
-        // Keep the ticket office's old palette draws so neighbouring colours stay stable.
-        if(index===4){r();r();}
+        // Preserve the removed point models' palette draws for neighbouring colours.
+        if(index===4||index===123){r();r();}
         return;
       }
       var p = b.pts, h = b.h, wall = WALLS[Math.floor(r() * WALLS.length)], roof = ROOFS[Math.floor(r() * ROOFS.length)];
@@ -2332,12 +2346,12 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261022-transylvania1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261022-upside1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
     meshContacts=new Float32Array(meshEntries.filter(function(e){
-      return ['building','bikeCafe','tutCoffee','ticketOffice','transylvania','bumper','carousel','coaster'].indexOf(e.kind)>=0;
+      return ['building','bikeCafe','tutCoffee','ticketOffice','upsideDownHouse','transylvania','bumper','carousel','coaster'].indexOf(e.kind)>=0;
     }).flatMap(function(e){
       var b=bbox(e.pts);return [e.cx,e.cz,Math.max(1,(b[2]-b[0])/2),Math.max(1,(b[3]-b[1])/2)];
     }));
@@ -2353,6 +2367,8 @@
     park.labels.unshift(['Касса',[ticketOfficeEntry.cx,ticketOfficeEntry.cz],18]);
     var transylvaniaEntry=meshEntries.find(function(e){return e.kind==='transylvania';});
     park.labels.unshift(['Hotel Transylvania',[transylvaniaEntry.cx,transylvaniaEntry.cz],18]);
+    var upsideDownEntry=meshEntries.find(function(e){return e.kind==='upsideDownHouse';});
+    park.labels.unshift(['Дом вверх дном',[upsideDownEntry.cx,upsideDownEntry.cz],18]);
     var oakSites = park.landmarks.filter(function (lm) { return lm.kind === 'oak'; });
     park.trees = park.trees.filter(function (tree) {
       return !park.scans.some(function (scan) { return Math.hypot(tree[0] - scan.at[0], tree[1] - scan.at[1]) < 9; }) &&
@@ -2521,7 +2537,10 @@
     if (benchmark || streamTest) startGame('free');
     if(new URLSearchParams(location.search).get('tour')==='details') visitDetails();
     var preview=new URLSearchParams(location.search).get('preview');
-    if(preview==='transylvania'){
+    if(preview==='upside-down-house'){
+      startGame('free');car.x=-25;car.z=-381;car.heading=-1.28;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.03;cam.dist=canvas.width<canvas.height?8:6;cam.top=false;
+    }else if(preview==='transylvania'){
       startGame('free');car.x=-19.5;car.z=-315.0;car.heading=.94;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.03;cam.dist=canvas.width<canvas.height?11:6;cam.top=false;
     }else if(preview==='ticket-office'){

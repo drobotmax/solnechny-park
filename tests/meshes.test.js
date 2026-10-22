@@ -12,7 +12,7 @@ test('detailed landmarks contain finite nondegenerate triangles, unit normals an
    assert(v[1]>=-.001&&v[1]<20,e.id);
   }
  }
- assert(total*40<5*1024*1024,'mesh payload must stay below 5 MiB');
+ assert(total*40<5.5*1024*1024,'mesh payload including the upside-down house must stay below 5.5 MiB');
 });
 test('mapped models retain their footprints; plaza stage uses the corrected smaller placement',()=>{
  const models=entries(park);assert.equal(new Set(models.map(e=>e.id)).size,models.length);
