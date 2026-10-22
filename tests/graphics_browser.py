@@ -133,6 +133,9 @@ with sync_playwright() as p:
     assert not errors, errors
     report["page_errors"] = errors
     (out / "validation.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    # Close the two WebGL contexts before Chromium's process teardown.
+    mobile.close()
+    page.close()
     browser.close()
 
 print(json.dumps({"screenshots": str(out), **report}, ensure_ascii=False, indent=2))

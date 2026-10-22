@@ -149,6 +149,6 @@ function build(g,e){
  // A short upside-down stair flight is visible at the upper right corner.
  for(let i=0;i<6;i++)box(W+.13,5.58+i*.15,-.08-i*.27,.36,.15,.28,C.white);
 }
-const api={frame,build,footprint,applyGround};
+const api={frame,build,footprint,applyGround,inside,nearBoundary};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkUpsideDownHouse=api;
 })(typeof window!=='undefined'?window:globalThis);

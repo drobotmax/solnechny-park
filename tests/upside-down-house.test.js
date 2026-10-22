@@ -9,7 +9,7 @@ test('upside-down house uses the mapped 2B footprint between the entrance pavili
  assert(f.width>8&&f.width<8.3&&f.depth>6.5&&f.depth<7.2);
  const west=all.find(e=>e.id==='b5'),east=all.find(e=>e.id==='b6');
  assert(west.cx<e.cx&&e.cx<east.cx);
- assert.equal(west.kind,'building');assert.equal(east.kind,'building');
+ assert.equal(west.kind,'policePost');assert.equal(east.kind,'shoreMooring');
  assert(f.front[0]>.39&&f.front[1]>.91,'the entrance faces southeast across the adjacent path');
  const rotated=House.footprint(e);
  for(let i=0;i<4;i++){
