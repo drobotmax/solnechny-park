@@ -83,13 +83,15 @@ with sync_playwright() as p:
     probes=page.evaluate("""async () => {
       const park=await (await fetch('park/park.json')).json(),entries=ParkMeshes.entries(park);
       const e=entries.find(e=>e.kind==='veranda'),g=entries.find(e=>e.kind==='verandaGazebo');
-      const f=ParkVeranda.frame(e),gf=ParkVeranda.frame(g),p=(name,q,blocked)=>({name,x:q[0],z:q[2],blocked});
-      return [p('floral_gate',f.at(-1.6,0,3.62),false),p('picket_fence',f.at(5,0,3.62),true),
+      const f=ParkVeranda.frame(e),gf=ParkVeranda.frame(g),p=(name,q,blocked,heading=0)=>({name,x:q[0],z:q[2],blocked,heading});
+      const gate=ParkVeranda.entrance(),q=gate.at(0,0,0),end=gate.at(1.65,0,0);
+      const heading=Math.atan2((f.right[0]-f.front[0])*Math.SQRT1_2,(-f.right[1]+f.front[1])*Math.SQRT1_2);
+      return [p('floral_gate',f.at(...q),false,heading),p('diagonal_fence',f.at(...end),true,heading),p('picket_fence',f.at(5,0,3.62),true),
         p('gazebo_freed_corner',gf.at(.4,0,-.9),false),p('cafe_body',[e.cx,0,e.cz],true),
         p('gazebo_body',[g.cx,0,g.cz],true)];
     }""")
     for probe in probes:
-        page.evaluate('p=>{__car.x=p.x;__car.z=p.z;__car.heading=0;__car.v=0;__car.steer=0;}',probe)
+        page.evaluate('p=>{__car.x=p.x;__car.z=p.z;__car.heading=p.heading;__car.v=0;__car.steer=0;}',probe)
         page.keyboard.down('w');page.wait_for_timeout(700);page.keyboard.up('w')
         moved=math.dist([probe['x'],probe['z']],page.evaluate('[__car.x,__car.z]'))
         report['physics'][probe['name']]={'metres':moved,'category':page.evaluate('__stats.car.cat')}

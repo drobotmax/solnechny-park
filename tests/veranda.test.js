@@ -28,6 +28,14 @@ test('Veranda has an open floral terrace, white fence, pink bicycle and a shingl
  assert(g.data.some((v,i)=>i%10===1&&v>5.3),'the gazebo has a raised roof lantern');
 });
 
+test('the entrance sign faces the bridge at 45 degrees to the promenade',()=>{
+ const mesh=Meshes.build(main),f=Veranda.frame(main),sign=[];
+ for(let i=0;i<mesh.data.length;i+=10)if(mesh.data[i+9]===15)sign.push(Array.from(mesh.data.subarray(i,i+3)));
+ const dx=sign[1][0]-sign[0][0],dz=sign[1][2]-sign[0][2],length=Math.hypot(dx,dz);
+ const along=(dx*f.right[0]+dz*f.right[1])/length,towardStreet=(dx*f.front[0]+dz*f.front[1])/length;
+ assert(Math.abs(along-Math.SQRT1_2)<1e-5&&Math.abs(towardStreet-Math.SQRT1_2)<1e-5,'the delivered sign geometry must follow the diagonal southwest entrance');
+});
+
 test('the entrance stays passable, the terrace fence blocks, and the gazebo frees its old square corners',()=>{
  const cats=new Uint8Array(park.w*park.h).fill(75),index=(x,z)=>Math.floor((z-park.z0)/park.mpp)*park.w+Math.floor((x-park.x0)/park.mpp);
  for(const e of [main,gazebo]){
@@ -36,7 +44,9 @@ test('the entrance stays passable, the terrace fence blocks, and the gazebo free
  }
  const f=Veranda.frame(main),at=(x,d)=>{const p=f.at(x,0,d);return index(p[0],p[2]);},gf=Veranda.frame(gazebo),corner=gf.at(.3,0,-.3),water=index(55,-430),coffee=index(33,-406);
  cats[water]=68;cats[coffee]=69;Veranda.applyGround(cats,park,all);
- assert.equal(cats[at(-1.6,3.62)],75,'the gate in the left floral arch is open');
+ const gate=Veranda.entrance();
+ for(const d of [-.8,0,.8]){const p=gate.at(0,0,d);assert.equal(cats[at(p[0],p[2])],75,'the diagonal gate and its approach are open');}
+ const end=gate.at(1.65,0,0);assert.equal(cats[at(end[0],end[2])]&31,13,'the diagonal fence meets the right arch post');
  assert.equal(cats[at(5,3.62)]&31,13,'the white picket fence blocks the stroller');
  assert.equal(cats[at(5,7.5)],75,'the public promenade remains open');
  assert.equal(cats[index(gazebo.cx,gazebo.cz)]&31,5);

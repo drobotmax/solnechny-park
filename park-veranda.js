@@ -7,8 +7,20 @@ function frame(e){
  const right=[(b[0]-a[0])/width,(b[1]-a[1])/width],front=[-right[1],right[0]];
  return {width,depth,right,front,at:(x,y,d)=>[a[0]+right[0]*x+front[0]*d,y,a[1]+right[1]*x+front[1]*d]};
 }
-function tools(g,e){
- const f=frame(e),at=f.at;
+// The entrance cuts the southwest corner, facing the approach from the bridge.
+function entrance(){
+ const left=[-3.5,1.07],right=[-.95,3.62],center=[(left[0]+right[0])/2,(left[1]+right[1])/2],s=Math.SQRT1_2;
+ return {left,right,center,halfWidth:1.275,halfCorner:Math.hypot(right[0]-left[0],right[1]-left[1])/2,
+  at:(u,y,d)=>[center[0]+s*(u-d),y,center[1]+s*(u+d)]};
+}
+function frontage(e){
+ const gate=entrance(),right=frame(e).width+1;
+ const a=gate.at(-gate.halfWidth,0,0),b=gate.at(gate.halfWidth,0,0);
+ return [[[-3.5,-.3],gate.left],[gate.left,[a[0],a[2]]],[[b[0],b[2]],gate.right],
+  [gate.right,[right,3.62]],[[right,-.3],[right,3.62]]];
+}
+function tools(g,e,localAt){
+ const f=frame(e),at=localAt?(x,y,d)=>f.at(...localAt(x,y,d)):f.at;
  const quad=(a,b,c,d,color,mat=7)=>g.quad(at(...a),at(...b),at(...c),at(...d),color,mat);
  const tri=(a,b,c,color,mat=7)=>g.tri(at(...a),at(...b),at(...c),color,mat);
  const beam=(a,b,r,color=C.wood,mat=7,sides=4)=>g.beam(at(...a),at(...b),r,color,mat,sides);
@@ -140,11 +152,17 @@ function main(g,e){
  quad([bx-bw/2-.24,6.20,front+.28],[bx,7.46,front+.28],[bx,7.46,back-.28],[bx-bw/2-.24,6.20,back-.28],C.roof,14);
  quad([bx,7.46,front+.28],[bx+bw/2+.24,6.20,front+.28],[bx+bw/2+.24,6.20,back-.28],[bx,7.46,back-.28],C.roof,14);
  // An open covered terrace projects toward the promenade.
- const left=-3.5,right=W+1.0,frontD=3.62;
- box((left+right)/2,.015,1.75,right-left,.035,3.7,[.51,.47,.39],1);
- quad([left-.15,2.48,frontD+.2],[right+.15,2.48,frontD+.2],[right+.15,3.48,-.8],[left-.15,3.48,-.8],C.roof,14);
- beam([left,2.46,frontD],[right,2.46,frontD],.065,C.wood);
+ const left=-3.5,right=W+1.0,frontD=3.62,gate=entrance(),entry=tools(g,e,gate.at);
+ const deck=[[left,-.1],[left,gate.left[1]],gate.right,[right,frontD],[right,-.1]];
+ for(let i=1;i<deck.length-1;i++)tri([deck[0][0],.05,deck[0][1]],[deck[i][0],.05,deck[i][1]],[deck[i+1][0],.05,deck[i+1][1]],[.51,.47,.39],1);
+ for(let i=0;i<deck.length;i++){
+  const a=deck[i],b=deck[(i+1)%deck.length];quad([a[0],.015,a[1]],[b[0],.015,b[1]],[b[0],.05,b[1]],[a[0],.05,a[1]],[.51,.47,.39],1);
+ }
+ const roof=[[left-.15,-.8],[left-.15,gate.left[1]+.06],[gate.right[0]-.06,frontD+.2],[right+.15,frontD+.2],[right+.15,-.8]],roofAt=p=>[p[0],3.48-(p[1]+.8)/4.62,p[1]];
+ for(let i=1;i<roof.length-1;i++)tri(roofAt(roof[0]),roofAt(roof[i]),roofAt(roof[i+1]),C.roof,14);
+ beam([gate.right[0],2.46,frontD],[right,2.46,frontD],.065,C.wood);
  for(let x=left;x<=right+.1;x+=(right-left)/5){
+  if(x<gate.right[0])continue;
   beam([x,.04,frontD-.1],[x,2.59,frontD-.1],.065,[.56,.53,.43]);
   beam([x,1.93,frontD-.12],[x+.38,2.47,frontD-.12],.042,[.56,.53,.43]);
   if(x>0){curtain(t,x,frontD-.20,-1);curtain(t,x,frontD-.20,1);}
@@ -155,24 +173,27 @@ function main(g,e){
   for(let y=.35;y<2.4;y+=.25)beam([x-.55,y,.25],[x+.55,y+.38,.25],.014,[.39,.34,.27]);
   table(t,x+1,1.5);
  }
- pickets(t,[left,frontD],[left+.6,frontD]);pickets(t,[-.45,frontD],[right,frontD]);
- pickets(t,[left,-.3],[left,frontD]);pickets(t,[right,-.3],[right,frontD]);
+ for(const [a,b] of frontage(e))pickets(t,a,b);
  // The gravel border and its curb follow the front fence, with a gap at the gate.
- for(const [a,b] of [[left-.9,left+.65],[-.45,right+.45]]){
+ for(const [a,b] of [[gate.right[0],right+.45]]){
   box((a+b)/2,.01,4.13,b-a,.045,.82,[.91,.91,.86],1);
   box((a+b)/2,.005,4.58,b-a,.11,.15,C.stone,1);
  }
+ for(const [a,b] of [[-gate.halfCorner-.35,-gate.halfWidth],[gate.halfWidth,gate.halfCorner+.35]]){
+  entry.box((a+b)/2,.01,.51,b-a,.045,.82,[.91,.91,.86],1);
+  entry.box((a+b)/2,.005,.96,b-a,.11,.15,C.stone,1);
+ }
  for(const x of [1.1,5.3,9.6,12.8]){windmill(t,x,frontD+.14);planter(t,x+.25,4.15);}
- // A separate floral entrance arch sits beside Tut Coffee, before the picket run.
- for(const x of [left+.5,-.45])beam([x,.025,frontD+.02],[x,3.0,frontD+.02],.075,[.72,.70,.61]);
- beam([left+.40,2.98,frontD+.02],[-.35,2.98,frontD+.02],.095,[.72,.70,.61]);
+ // Arch, sign, flowers and bicycle share the same 45-degree entrance frame.
+ for(const u of [-gate.halfWidth,gate.halfWidth])entry.beam([u,.025,0],[u,3.0,0],.075,[.72,.70,.61]);
+ entry.beam([-gate.halfWidth-.10,2.98,0],[gate.halfWidth+.10,2.98,0],.095,[.72,.70,.61]);
  const start=g.data.length;
- quad([left+.47,2.56,frontD+.48],[-.42,2.56,frontD+.48],[-.42,2.96,frontD+.48],[left+.47,2.96,frontD+.48],[0,0,0],15);
+ entry.quad([-1.305,2.56,.46],[1.305,2.56,.46],[1.305,2.96,.46],[-1.305,2.96,.46],[0,0,0],15);
  const uv=[[.02,.95],[.98,.95],[.98,.05],[.02,.95],[.98,.05],[.02,.05]];
  for(let i=0;i<6;i++){g.data[start+i*10+6]=uv[i][0];g.data[start+i*10+7]=uv[i][1];}
- garland(t,left-.18,W*.48,frontD+.11,2.89,7541);
- garland(t,left+.1,-.15,frontD+.11,3.24,3382);
- bicycle(t,left-.45,4.15);
+ garland(t,gate.right[0],W*.48,frontD+.11,2.89,7541);
+ garland(entry,-1.625,1.625,.09,3.24,3382);
+ bicycle(entry,-2.10,.51);
 }
 function gazebo(g,e){
  const t=tools(g,e),{f,quad,tri,beam,box}=t,x=f.width/2,d=-f.depth/2,R=Math.min(f.width,f.depth)*.445;
@@ -204,7 +225,7 @@ function applyGround(cats,park,entries){
   const dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz),nx=-dz/len*r,nz=dx/len*r;
   return [[a[0]+nx,a[1]+nz],[b[0]+nx,b[1]+nz],[b[0]-nx,b[1]-nz],[a[0]-nx,a[1]-nz]];
  };
- const fences=[strip(at(-3.5,3.62),at(-2.9,3.62),.20),strip(at(-.45,3.62),at(W+1,3.62),.20),strip(at(-3.5,-.3),at(-3.5,3.62),.20),strip(at(W+1,-.3),at(W+1,3.62),.20)];
+ const fences=frontage(e).map(([a,b])=>strip(at(...a),at(...b),.20));
  const gf=frame(gazeboEntry),ga=gf.at(.6,0,.28),gb=gf.at(gf.width-.6,0,.28);fences.push(strip([ga[0],ga[2]],[gb[0],gb[2]],.20));
  const octagon=footprint(gazeboEntry),inside=(p,x,z)=>{let hit=false;for(let i=0,j=p.length-1;i<p.length;j=i++)if((p[i][1]>z)!==(p[j][1]>z)&&x<(p[j][0]-p[i][0])*(z-p[i][1])/(p[j][1]-p[i][1])+p[i][0])hit=!hit;return hit;};
  const nearOldGazebo=(x,z)=>gazeboEntry.pts.some((a,i)=>{
@@ -227,6 +248,6 @@ function atlas(){
  c.textAlign='center';c.textBaseline='middle';c.fillStyle='#f4f2e7';c.font='bold 148px Arial, sans-serif';
  c.save();c.translate(512,101);c.scale(.96,1);c.fillText('ВЕРАНДА',0,0);c.restore();return canvas;
 }
-const api={frame,main,gazebo,footprint,clearsTree,applyGround,atlas};
+const api={frame,entrance,main,gazebo,footprint,clearsTree,applyGround,atlas};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkVeranda=api;
 })(typeof window!=='undefined'?window:globalThis);
