@@ -2,7 +2,8 @@
 (function(root){
 'use strict';
 const TicketOffice=typeof module!=='undefined'&&module.exports?require('./park-ticket-office.js'):root.ParkTicketOffice;
-const buildingIds=[3,4,5,6,7,49,50,81], rideIds=[0,1,2,6,9,17,25,26,27,36];
+const Transylvania=typeof module!=='undefined'&&module.exports?require('./park-transylvania.js'):root.ParkTransylvania;
+const buildingIds=[3,4,5,6,7,49,50,81], rideIds=[0,1,2,3,6,9,17,25,26,27,36];
 // Placed and scaled to the stage rectangle marked in the user's plaza screenshot.
 const plazaStageFootprint=[[49.93,-379.74],[44.53,-369.06],[50.08,-366.26],[55.48,-376.94]];
 const bridgeLandingAxis=[[7.87,-432.91],[13.3,-406.85]];
@@ -35,7 +36,7 @@ function entries(park){
  const stageCenter=center(plazaStageFootprint);
  return buildingIds.map(i=>{const b=park.buildings[i],c=center(b.pts);return {id:'b'+i,cx:c[0],cz:c[1],kind:i===4?'ticketOffice':i===7?'bikeCafe':i===49?'tutCoffee':'building',pts:b.pts,h:i===81?8:b.h,style:i===81?'colonnade':'cafe'};})
  .concat(rideIds.map(i=>{const r=park.rides[i],c=center(r.pts);
-  const kind=i===1?'coaster':i===36?'carousel':i===0||i===2?'bumper':i===17?'train':i===26?'swingTower':i===27?'pendulum':'spinner';
+  const kind=i===3?'transylvania':i===1?'coaster':i===36?'carousel':i===0||i===2?'bumper':i===17?'train':i===26?'swingTower':i===27?'pendulum':'spinner';
   return {id:'r'+i,cx:c[0],cz:c[1],kind,pts:r.pts};}))
  .concat([{id:'plaza-stage',cx:stageCenter[0],cz:stageCenter[1],kind:'plazaStage',pts:plazaStageFootprint},
   {id:'entrance-landing',cx:10.6,cz:-419.9,kind:'bridgeLanding',pts:bridgeLandingAxis}]);
@@ -490,7 +491,7 @@ function pendulum(g,e){
  }
 }
 function build(e){
- const g=new Geometry();({building,bikeCafe,tutCoffee,bridgeLanding,plazaStage,bumper,carousel,coaster,spinner,train,swingTower,pendulum,forest,bridgeRails,ticketOffice:TicketOffice.build}[e.kind])(g,e);
+ const g=new Geometry();({building,bikeCafe,tutCoffee,bridgeLanding,plazaStage,bumper,carousel,coaster,spinner,train,swingTower,pendulum,forest,bridgeRails,ticketOffice:TicketOffice.build,transylvania:Transylvania.build}[e.kind])(g,e);
  const data=new Float32Array(g.data);let radius=0;
  for(let i=0;i<data.length;i+=10)radius=Math.max(radius,Math.hypot(data[i]-e.cx,data[i+1]-5,data[i+2]-e.cz));
  return {data,n:data.length/10,center:[e.cx,5,e.cz],radius};

@@ -33,7 +33,7 @@ const world=ctx.buildWorld(park);
 const chunks=world.chunks.map((c,i)=>Object.assign({id:String(i),cx:c.cx,cz:c.cz},writeCloud(c)));
 const raw=ctx.window.SPZ.parse(new Uint8Array(zlib.gunzipSync(fs.readFileSync('karasunsky.spz'))));
 const stroller=writeCloud(ctx.extractStroller(raw));
-const inputHashes=Object.fromEntries(['park.js','park-meshes.js','park-ticket-office.js','park/park.json','park/scans.json','park/ground.png','karasunsky.spz','tools/build-stream-assets.cjs'].map(f=>[f,crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex')]));
+const inputHashes=Object.fromEntries(['park.js','park-meshes.js','park-ticket-office.js','park-transylvania.js','park/park.json','park/scans.json','park/ground.png','karasunsky.spz','tools/build-stream-assets.cjs'].map(f=>[f,crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex')]));
 const manifest={inputHashes,version:1,chunkSize:64,worldPoints:world.n,chunks,stroller};
 fs.writeFileSync('park/stream-manifest.json',JSON.stringify(manifest));
 // Remove only obsolete generated assets, never source scans.

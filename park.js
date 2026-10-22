@@ -351,7 +351,7 @@
     flat in float vMaterial;
     in float vDistance;
     uniform vec3 uEye;
-    uniform sampler2D uTicketAtlas;
+    uniform sampler2D uTicketAtlas,uRideAtlas;
     uniform float uFogNear,uFogFar,uLight,uTime;
   ` + COLOR + ParkAtmosphere.glsl + `
     out vec4 o;
@@ -375,6 +375,12 @@
         shade=.8+.2*max(0.,n.y);
       }
       if(vMaterial==6.){c=texture(uTicketAtlas,vColor.rg).rgb;shade=.94;}
+      if(vMaterial==9.){c=texture(uRideAtlas,vColor.rg).rgb;shade=.88+.12*max(0.,dot(n,light));}
+      if(vMaterial==10.){
+        c*=mix(1.,.98+.025*noise(vPos*55.),detail);
+        shade=.68+.32*max(0.,dot(n,light));
+        c+=vec3(.16)*pow(max(0.,dot(reflect(-light,n),normalize(uEye-vPos))),36.)*uDay;
+      }
       if(vMaterial==7.)shade=.78+.22*max(0.,dot(n,light));
       if(vMaterial==8.){
         vec3 v=normalize(uEye-vPos);
@@ -408,7 +414,7 @@
   }
   var P = program(PTS_VS, PTS_FS, ['uModel', 'uFocal', 'uMaxPt', 'uAnim', 'uInstanced', 'uDensity', 'uPointSun', 'uRound', 'uFoliage']);
   var G = program(GROUND_VS, GROUND_FS, ['uGround', 'uAlbedo', 'uShadow', 'uEye', 'uStroller', 'uFrame', 'uContact', 'uContactN', 'uRampFrame', 'uRampShape', 'uRampPass']);
-  var M = program(MESH_VS, MESH_FS, ['uEye', 'uTicketAtlas']);
+  var M = program(MESH_VS, MESH_FS, ['uEye', 'uTicketAtlas', 'uRideAtlas']);
   var S = program(ParkAtmosphere.skyVS, ParkAtmosphere.skyFS + COLOR + `
     void main(){
       vec3 ray=normalize(uForward+vScreen.x*uAspect*uTanFov*uRight+vScreen.y*uTanFov*uUp);
@@ -786,7 +792,11 @@
       }
     });
 
-    park.rides.forEach(function (ride,index) { if (ride.name !== 'Круговой обзор' && ParkMeshes.rideIds.indexOf(index)===-1) buildRide(cl, r, ride); });
+    park.rides.forEach(function (ride,index) {
+      // Retain the old colour draw when replacing the mapped mushroom ride.
+      if(index===3){r();return;}
+      if (ride.name !== 'Круговой обзор' && ParkMeshes.rideIds.indexOf(index)===-1) buildRide(cl, r, ride);
+    });
     park.fences.forEach(function (f) {
       polyline(f.pts, 0.3, function (x, z, s) {
         var post = (s % 2.5) < 0.3;
@@ -1093,7 +1103,7 @@
     return false;
   }
 
-  var park = null, cats = null, groundTex = null, albedoTex = null, shadowTex = null, foliageTex = null, ticketAtlasTex = null, groundVAO = null, rampVAO = null, rampVertexCount = 0, world = null, stroller = null;
+  var park = null, cats = null, groundTex = null, albedoTex = null, shadowTex = null, foliageTex = null, ticketAtlasTex = null, rideAtlasTex = null, groundVAO = null, rampVAO = null, rampVertexCount = 0, world = null, stroller = null;
   var ferris = null, jets = null, bottleGPU = null;
   var capturedScans = [];
   var gulls = { birds: [] }, gullGPU = null, gullWingGPU = null, nextGullCry = 0;
@@ -1782,6 +1792,7 @@
     gl.useProgram(M.prog);colorUniforms(M);
     gl.uniform1f(M.uTime,time);
     gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,ticketAtlasTex);gl.uniform1i(M.uTicketAtlas,4);
+    gl.activeTexture(gl.TEXTURE5);gl.bindTexture(gl.TEXTURE_2D,rideAtlasTex);gl.uniform1i(M.uRideAtlas,5);
     gl.uniformMatrix4fv(M.uView,false,view);gl.uniformMatrix4fv(M.uProj,false,proj);
     gl.uniform3fv(M.uEye,eye);gl.uniform1f(M.uFogNear,fogNear);gl.uniform1f(M.uFogFar,fogFar);
     var meshTriangles=0,meshBytes=0;
@@ -2321,12 +2332,12 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261022-ticket1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261022-transylvania1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
     meshContacts=new Float32Array(meshEntries.filter(function(e){
-      return ['building','bikeCafe','tutCoffee','ticketOffice','bumper','carousel','coaster'].indexOf(e.kind)>=0;
+      return ['building','bikeCafe','tutCoffee','ticketOffice','transylvania','bumper','carousel','coaster'].indexOf(e.kind)>=0;
     }).flatMap(function(e){
       var b=bbox(e.pts);return [e.cx,e.cz,Math.max(1,(b[2]-b[0])/2),Math.max(1,(b[3]-b[1])/2)];
     }));
@@ -2340,6 +2351,8 @@
     park.labels.unshift(['Тут кофе',[tutCoffeeEntry.cx,tutCoffeeEntry.cz],22]);
     var ticketOfficeEntry=meshEntries.find(function(e){return e.kind==='ticketOffice';});
     park.labels.unshift(['Касса',[ticketOfficeEntry.cx,ticketOfficeEntry.cz],18]);
+    var transylvaniaEntry=meshEntries.find(function(e){return e.kind==='transylvania';});
+    park.labels.unshift(['Hotel Transylvania',[transylvaniaEntry.cx,transylvaniaEntry.cz],18]);
     var oakSites = park.landmarks.filter(function (lm) { return lm.kind === 'oak'; });
     park.trees = park.trees.filter(function (tree) {
       return !park.scans.some(function (scan) { return Math.hypot(tree[0] - scan.at[0], tree[1] - scan.at[1]) < 9; }) &&
@@ -2401,6 +2414,9 @@
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.generateMipmap(gl.TEXTURE_2D);
     ticketAtlasTex=texture(4,gl.RGBA8,gl.RGBA,0,0,null,ParkTicketOffice.atlas());
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.generateMipmap(gl.TEXTURE_2D);
+    rideAtlasTex=texture(5,gl.RGBA8,gl.RGBA,0,0,null,ParkTransylvania.atlas());
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.generateMipmap(gl.TEXTURE_2D);
     rgba=null; cv.width=cv.height=1; res[1]=res[2]=null;
@@ -2505,7 +2521,10 @@
     if (benchmark || streamTest) startGame('free');
     if(new URLSearchParams(location.search).get('tour')==='details') visitDetails();
     var preview=new URLSearchParams(location.search).get('preview');
-    if(preview==='ticket-office'){
+    if(preview==='transylvania'){
+      startGame('free');car.x=-19.5;car.z=-315.0;car.heading=.94;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.03;cam.dist=canvas.width<canvas.height?11:6;cam.top=false;
+    }else if(preview==='ticket-office'){
       startGame('free');car.x=-27.95;car.z=-306.5;car.heading=-.164;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.10;cam.dist=5;cam.top=false;
     }else if(preview==='cafe'){
