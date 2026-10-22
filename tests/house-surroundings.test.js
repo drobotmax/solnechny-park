@@ -42,3 +42,18 @@ test('the actual delivered mesh has a full steel flight and elevated landing on 
  for(let i=0;i<g.data.length;i+=10){const x=g.data[i],y=g.data[i+1],z=g.data[i+2],dx=x-f.center[0],dz=z-f.center[1];if(dx*f.right[0]+dz*f.right[1]>4.45&&y<4.5)stairs.push(y);}
  assert(stairs.length>400);assert(Math.min(...stairs)<.16&&Math.max(...stairs)>4.3);
 });
+
+test('the police facade and collision footprint turn exactly 90 degrees toward the house',()=>{
+ const e=all.find(e=>e.kind==='policePost'),s=Shore.sites.policePost,p=Shore.footprint(e);
+ const original=[[-s.w/2,-s.depth/2],[s.w/2,-s.depth/2],[s.w/2,s.depth/2],[-s.w/2,s.depth/2]].map(([x,d])=>f.at(s.x+x,0,s.d+d));
+ for(let i=0;i<4;i++){
+  const a=[original[i][0]-e.cx,original[i][2]-e.cz],b=[p[i][0]-e.cx,p[i][1]-e.cz];
+  assert(Math.abs(a[0]*b[0]+a[1]*b[1])<1e-8);
+  assert(Math.abs(Math.hypot(...a)-Math.hypot(...b))<1e-8);
+  assert(a[0]*b[1]-a[1]*b[0]<0,'the facade faces along the path toward the house');
+ }
+ const mesh=Meshes.build(e),normals=[];
+ for(let i=0;i<mesh.data.length;i+=10)if(mesh.data[i+9]===13)normals.push([mesh.data[i+3],mesh.data[i+5]]);
+ assert.equal(normals.length,6);
+ assert(normals.every(([x,z])=>x*f.right[0]+z*f.right[1]>.99),'the sign faces along the house frontage toward the house');
+});

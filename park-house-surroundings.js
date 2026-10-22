@@ -6,7 +6,11 @@ const C={wood:[.28,.23,.22],dark:[.12,.14,.17],white:[.89,.91,.88],glass:[.17,.2
 const sites={policePost:{x:-10,d:-1.2,w:3.5,depth:2.25,h:2.65},shoreTicket:{x:7.8,d:-.65,w:2.2,depth:1.85,h:2.75}};
 const boats=[{x:8.5,d:-16.2},{x:12.6,d:-16.8},{x:16.7,d:-17.4},{x:20.8,d:-18}];
 function rect(f,x,d,w,depth){return [[x-w/2,d-depth/2],[x+w/2,d-depth/2],[x+w/2,d+depth/2],[x-w/2,d+depth/2]].map(p=>{const q=f.at(p[0],0,p[1]);return [q[0],q[2]];});}
-function footprint(e){const s=sites[e.kind];return rect(House.frame(e.house),s.x,s.d,s.w,s.depth);}
+function orientCabin(e,p){
+ // Quarter-turn toward the house, around the police cabin's existing centre.
+ return e.kind==='policePost'?[e.cx+p[2]-e.cz,p[1],e.cz-p[0]+e.cx]:p;
+}
+function footprint(e){const s=sites[e.kind];return rect(House.frame(e.house),s.x,s.d,s.w,s.depth).map(([x,z])=>{const p=orientCabin(e,[x,0,z]);return [p[0],p[2]];});}
 function layout(house,kind){const s=sites[kind],p=House.frame(house).at(s.x,0,s.d);return {cx:p[0],cz:p[2],house};}
 function tools(g,house){
  const at=House.frame(house).at;
@@ -33,7 +37,7 @@ function tools(g,house){
  return {at,quad,beam,box,window,sign};
 }
 function cabin(g,e){
- const s=sites[e.kind],{box,quad,beam,window,sign}=tools(g,e.house),x=s.x,d=s.d,front=d+s.depth/2,police=e.kind==='policePost';
+ const start=g.data.length,s=sites[e.kind],{box,quad,beam,window,sign}=tools(g,e.house),x=s.x,d=s.d,front=d+s.depth/2,police=e.kind==='policePost';
  box(x,.015,d,s.w+.6,.12,s.depth+.7,C.concrete,1);
  box(x,.15,d,s.w,2.23,s.depth,C.wood,police?1:12);
  box(x,.13,d,s.w+.04,.12,s.depth+.04,C.dark,2);
@@ -56,6 +60,10 @@ function cabin(g,e){
   quad([x-s.w/2-.14,.98,front+.14],[x+s.w/2+.14,.98,front+.14],[x+s.w/2-.16,.15,front-.12],[x-s.w/2+.16,.15,front-.12],C.red,11);
   for(const side of [-1,1])beam([x+side*(s.w/2+.14),.98,front+.16],[x+side*(s.w/2-.16),.15,front-.10],.034,C.white,7);
   for(const u of [-.7,.7])box(x+u,2.22,front+.10,.12,.12,.12,C.white);
+ }
+ if(police)for(let i=start;i<g.data.length;i+=10){
+  const p=orientCabin(e,g.data.slice(i,i+3)),nx=g.data[i+3],nz=g.data[i+5];
+  g.data[i]=p[0];g.data[i+2]=p[2];g.data[i+3]=nz;g.data[i+5]=-nx;
  }
 }
 function stairs(g,e){

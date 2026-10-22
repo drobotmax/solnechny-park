@@ -16,7 +16,7 @@ report={};errors=[]
 poses={
     'front':{'x':-42,'z':-372,'y':1.7,'heading':-.396,'pitch':.12},
     'right':{'x':-29,'z':-384,'y':1.7,'heading':-.99,'pitch':.09},
-    'police':{'x':-54,'z':-372,'y':1.7,'heading':-.29,'pitch':.015},
+    'police':{'x':-50.5,'z':-379.2,'y':1.7,'heading':-1.15,'pitch':.035},
     'overview':{'x':-17,'z':-365,'y':23,'heading':-.90,'pitch':-.50},
 }
 
@@ -79,6 +79,13 @@ with sync_playwright() as p:
             ('unchanged_hall',-28,-362,True)]
     for name,x,z,blocked in probes:
         page.evaluate('p=>{__car.x=p.x;__car.z=p.z;__car.heading=0;__car.v=0;__car.steer=0;}',{'x':x,'z':z})
+        page.keyboard.down('w');page.wait_for_timeout(700);page.keyboard.up('w')
+        moved=math.dist([x,z],page.evaluate('[__car.x,__car.z]'))
+        report['physics'][name]={'metres':moved,'category':page.evaluate('__stats.car.cat')}
+        assert moved<.01 if blocked else moved>.1,(name,moved)
+    for name,x,z,blocked in [('police_freed_corner',-55.1727,-382.7566,False),
+                             ('police_rotated_corner',-57.4192,-383.6109,True)]:
+        page.evaluate('p=>{__car.x=p.x;__car.z=p.z;__car.heading=2.73;__car.v=0;__car.steer=0;}',{'x':x,'z':z})
         page.keyboard.down('w');page.wait_for_timeout(700);page.keyboard.up('w')
         moved=math.dist([x,z],page.evaluate('[__car.x,__car.z]'))
         report['physics'][name]={'metres':moved,'category':page.evaluate('__stats.car.cat')}
