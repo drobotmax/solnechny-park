@@ -12,6 +12,7 @@ python3 -m http.server 8791 --bind 127.0.0.1
 
 - Игра: http://127.0.0.1:8791/park.html
 - Сразу к фонтанам: http://127.0.0.1:8791/park.html?tour=fountains
+- Кафе «Веранда»: http://127.0.0.1:8791/park.html?preview=veranda&grain=0
 - Просмотрщик сканов: http://127.0.0.1:8791/index.html
 - Материалы съёмки: http://127.0.0.1:8791/capture.html
 

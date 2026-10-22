@@ -351,7 +351,7 @@
     flat in float vMaterial;
     in float vDistance;
     uniform vec3 uEye;
-    uniform sampler2D uTicketAtlas,uRideAtlas,uShoreAtlas;
+    uniform sampler2D uTicketAtlas,uRideAtlas,uShoreAtlas,uVerandaAtlas;
     uniform float uFogNear,uFogFar,uLight,uTime;
   ` + COLOR + ParkAtmosphere.glsl + `
     out vec4 o;
@@ -377,6 +377,14 @@
       if(vMaterial==6.){c=texture(uTicketAtlas,vColor.rg).rgb;shade=.94;}
       if(vMaterial==9.){c=texture(uRideAtlas,vColor.rg).rgb;shade=.88+.12*max(0.,dot(n,light));}
       if(vMaterial==13.){c=texture(uShoreAtlas,vColor.rg).rgb;shade=.94;}
+      if(vMaterial==15.){c=texture(uVerandaAtlas,vColor.rg).rgb;shade=.94;}
+      if(vMaterial==14.){
+        vec3 across=normalize(vec3(n.z,0.,-n.x));
+        float row=vPos.y*7.,u=dot(vPos,across)*3.2+floor(row)*.5;
+        float edge=1.-smoothstep(.025,.075,abs(fract(row)-.5));
+        float seam=1.-smoothstep(.015,.04,abs(fract(u)-.5));
+        c*=mix(1.,.93+.11*noise(vec3(floor(u),floor(row),0.))-edge*.22-seam*.12,detail);
+      }
       if(vMaterial==10.){
         c*=mix(1.,.98+.025*noise(vPos*55.),detail);
         shade=.68+.32*max(0.,dot(n,light));
@@ -429,7 +437,7 @@
   }
   var P = program(PTS_VS, PTS_FS, ['uModel', 'uFocal', 'uMaxPt', 'uAnim', 'uInstanced', 'uDensity', 'uPointSun', 'uRound', 'uFoliage']);
   var G = program(GROUND_VS, GROUND_FS, ['uGround', 'uAlbedo', 'uShadow', 'uEye', 'uStroller', 'uFrame', 'uContact', 'uContactN', 'uRampFrame', 'uRampShape', 'uRampPass']);
-  var M = program(MESH_VS, MESH_FS, ['uEye', 'uTicketAtlas', 'uRideAtlas', 'uShoreAtlas']);
+  var M = program(MESH_VS, MESH_FS, ['uEye', 'uTicketAtlas', 'uRideAtlas', 'uShoreAtlas', 'uVerandaAtlas']);
   var S = program(ParkAtmosphere.skyVS, ParkAtmosphere.skyFS + COLOR + `
     void main(){
       vec3 ray=normalize(uForward+vScreen.x*uAspect*uTanFov*uRight+vScreen.y*uTanFov*uUp);
@@ -765,7 +773,7 @@
     var oakSites = park.landmarks.filter(function (lm) { return lm.kind === 'oak'; });
     var hiddenTree = { add: function () {} };
     park.trees.forEach(function (t) {
-      var crowdedOak = oakSites.some(function (oak) { return Math.hypot(t[0] - oak.at[0], t[1] - oak.at[1]) < 7.5; });
+      var crowdedOak = ParkMeshes.verandaClearsTree(t[0],t[1]) || oakSites.some(function (oak) { return Math.hypot(t[0] - oak.at[0], t[1] - oak.at[1]) < 7.5; });
       // Consume the same seeded choices so nearby removal does not alter the rest of the park.
       tree(crowdedOak ? hiddenTree : cl, r, t[0], t[1], t[2], t[3]);
     });
@@ -1118,7 +1126,7 @@
     return false;
   }
 
-  var park = null, cats = null, groundTex = null, albedoTex = null, shadowTex = null, foliageTex = null, ticketAtlasTex = null, rideAtlasTex = null, shoreAtlasTex = null, groundVAO = null, rampVAO = null, rampVertexCount = 0, world = null, stroller = null;
+  var park = null, cats = null, groundTex = null, albedoTex = null, shadowTex = null, foliageTex = null, ticketAtlasTex = null, rideAtlasTex = null, shoreAtlasTex = null, verandaAtlasTex = null, groundVAO = null, rampVAO = null, rampVertexCount = 0, world = null, stroller = null;
   var ferris = null, jets = null, bottleGPU = null;
   var capturedScans = [];
   var gulls = { birds: [] }, gullGPU = null, gullWingGPU = null, nextGullCry = 0;
@@ -1809,6 +1817,7 @@
     gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,ticketAtlasTex);gl.uniform1i(M.uTicketAtlas,4);
     gl.activeTexture(gl.TEXTURE5);gl.bindTexture(gl.TEXTURE_2D,rideAtlasTex);gl.uniform1i(M.uRideAtlas,5);
     gl.activeTexture(gl.TEXTURE6);gl.bindTexture(gl.TEXTURE_2D,shoreAtlasTex);gl.uniform1i(M.uShoreAtlas,6);
+    gl.activeTexture(gl.TEXTURE7);gl.bindTexture(gl.TEXTURE_2D,verandaAtlasTex);gl.uniform1i(M.uVerandaAtlas,7);
     gl.uniformMatrix4fv(M.uView,false,view);gl.uniformMatrix4fv(M.uProj,false,proj);
     gl.uniform3fv(M.uEye,eye);gl.uniform1f(M.uFogNear,fogNear);gl.uniform1f(M.uFogFar,fogFar);
     var meshTriangles=0,meshBytes=0;
@@ -2348,14 +2357,14 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261022-shore2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261022-veranda1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
     meshContacts=new Float32Array(meshEntries.filter(function(e){
-      return ['building','bikeCafe','tutCoffee','ticketOffice','upsideDownHouse','policePost','shoreTicket','transylvania','bumper','carousel','coaster'].indexOf(e.kind)>=0;
+      return ['building','bikeCafe','tutCoffee','ticketOffice','upsideDownHouse','policePost','shoreTicket','veranda','verandaGazebo','transylvania','bumper','carousel','coaster'].indexOf(e.kind)>=0;
     }).flatMap(function(e){
-      var p=e.kind==='upsideDownHouse'?ParkUpsideDownHouse.footprint(e):e.kind==='policePost'||e.kind==='shoreTicket'?ParkHouseSurroundings.footprint(e):e.pts;
+      var p=e.kind==='upsideDownHouse'?ParkUpsideDownHouse.footprint(e):e.kind==='policePost'||e.kind==='shoreTicket'?ParkHouseSurroundings.footprint(e):e.kind==='verandaGazebo'?ParkVeranda.footprint(e):e.pts;
       var b=bbox(p);return [e.cx,e.cz,Math.max(1,(b[2]-b[0])/2),Math.max(1,(b[3]-b[1])/2)];
     }));
     park.scans = res[3].scans;
@@ -2366,6 +2375,8 @@
     park.scans.forEach(function (scan) { park.labels.unshift([scan.name, scan.at, 16]); });
     var tutCoffeeEntry=meshEntries.find(function(e){return e.kind==='tutCoffee';});
     park.labels.unshift(['Тут кофе',[tutCoffeeEntry.cx,tutCoffeeEntry.cz],22]);
+    var verandaEntry=meshEntries.find(function(e){return e.kind==='veranda';});
+    park.labels.unshift(['Веранда',[verandaEntry.cx,verandaEntry.cz],22]);
     var ticketOfficeEntry=meshEntries.find(function(e){return e.kind==='ticketOffice';});
     park.labels.unshift(['Касса',[ticketOfficeEntry.cx,ticketOfficeEntry.cz],18]);
     var transylvaniaEntry=meshEntries.find(function(e){return e.kind==='transylvania';});
@@ -2376,7 +2387,8 @@
     var oakSites = park.landmarks.filter(function (lm) { return lm.kind === 'oak'; });
     park.trees = park.trees.filter(function (tree) {
       return !park.scans.some(function (scan) { return Math.hypot(tree[0] - scan.at[0], tree[1] - scan.at[1]) < 9; }) &&
-             !oakSites.some(function (oak) { return Math.hypot(tree[0] - oak.at[0], tree[1] - oak.at[1]) < 7.5; });
+             !oakSites.some(function (oak) { return Math.hypot(tree[0] - oak.at[0], tree[1] - oak.at[1]) < 7.5; }) &&
+             !ParkMeshes.verandaClearsTree(tree[0],tree[1]);
     });
     meshes=new ParkStreaming.Stream(meshEntries.concat(ParkMeshes.forestEntries(park.trees),ParkMeshes.bridgeEntries(park)),uploadMesh,releaseMesh,2);
     var stageFootprint=meshEntries.find(function(e){return e.kind==='plazaStage';}).pts;
@@ -2391,6 +2403,7 @@
     for (var i = 0; i < cats.length; i++) cats[i] = rgba[i * 4];
     ParkUpsideDownHouse.applyGround(cats,park,upsideDownEntry);
     ParkHouseSurroundings.applyGround(cats,park,meshEntries);
+    ParkVeranda.applyGround(cats,park,meshEntries);
     for(var z=-440;z<=-400;z+=park.mpp)for(var x=-22;x<=43;x+=park.mpp){
       var zone=ParkMeshes.landingZone(x,z);
       if(!zone)continue;
@@ -2442,6 +2455,9 @@
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.generateMipmap(gl.TEXTURE_2D);
     shoreAtlasTex=texture(6,gl.RGBA8,gl.RGBA,0,0,null,ParkHouseSurroundings.atlas());
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.generateMipmap(gl.TEXTURE_2D);
+    verandaAtlasTex=texture(7,gl.RGBA8,gl.RGBA,0,0,null,ParkVeranda.atlas());
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.generateMipmap(gl.TEXTURE_2D);
     rgba=null; cv.width=cv.height=1; res[1]=res[2]=null;
@@ -2546,7 +2562,11 @@
     if (benchmark || streamTest) startGame('free');
     if(new URLSearchParams(location.search).get('tour')==='details') visitDetails();
     var preview=new URLSearchParams(location.search).get('preview');
-    if(preview==='upside-down-house'){
+    if(preview==='veranda'){
+      var portrait=canvas.width<canvas.height;
+      startGame('free');car.x=portrait?43:49;car.z=portrait?-396:-393;car.heading=portrait?.78:.30;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=portrait?.045:.025;cam.dist=portrait?24:8;cam.top=false;
+    }else if(preview==='upside-down-house'){
       startGame('free');car.x=-47;car.z=-375;car.heading=-.02;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.03;cam.dist=canvas.width<canvas.height?14:6;cam.top=false;
     }else if(preview==='transylvania'){
