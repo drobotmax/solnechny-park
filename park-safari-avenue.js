@@ -11,7 +11,6 @@ const fresh={x:77.1,z:-192.3,w:3.8,d:2.7},coffee={x:77.2,z:-186.8,w:3.6,d:3.0};
 const gurman={x:68.5,z:-182.7,w:5.6,d:3.6},picnic={x:71.0,z:-168.8,w:4.2,d:3.0};
 const forecourt=[[63.6,-195],[81.8,-195],[82.6,-180],[71.5,-176.6],[65.4,-178.5],[64.8,-185.8]];
 const rearWalk=[[79.7,-189.6],[83.0,-189.6],[84,-180],[80,-173],[77,-169]];
-const westWalk=[[56.8,-182.2],[51,-178],[45,-172.8],[44,-164],[46,-151]];
 const courtFence=[[0,-161.52],[39.05,-168.54],[43.3,-145.2]];
 const shade={x:65,z:-211.8,w:6.8,d:4.4};
 const ticket={x:33.0,z:-199.6,w:4.9,d:3.7};
@@ -129,7 +128,7 @@ function solid(x,z){
  const u=z-shade.z,v=shade.x-x;if(Math.abs(u)<shade.w/2+.1&&Math.abs(v)<shade.d/2+.1&&(v<-1.75||v>1.55&&Math.abs(u)>.95||Math.abs(u)>shade.w/2-.15))return true;
  return false;
 }
-function clearsTree(x,z){return x>26&&x<87&&z>-236&&z<-145&&(J.distance(avenue,x,z)<6.3||J.distance(approach,x,z)<4.2||J.distance(wall,x,z)<2.0||J.distance(westWalk,x,z)<2.3||J.distance(courtFence,x,z)<.8||J.distance(rearWalk,x,z)<2.1||J.inside(forecourt,x,z)||rect(x,z,[36,-202],14,28)||rect(x,z,[67,-198],15,48));}
+function clearsTree(x,z){return x>26&&x<87&&z>-236&&z<-145&&(J.distance(avenue,x,z)<6.3||J.distance(approach,x,z)<4.2||J.distance(wall,x,z)<2.0||J.distance(courtFence,x,z)<.8||J.distance(rearWalk,x,z)<2.1||J.inside(forecourt,x,z)||rect(x,z,[36,-202],14,28)||rect(x,z,[67,-198],15,48));}
 function applyGround(cats,park){const oldBuilding=park.buildings[115].pts,oldTicket=park.buildings[128].pts,oldPlay=park.rides[45].pts,oldPlayRing=oldPlay.concat([oldPlay[0]]);
  for(let iz=Math.max(0,Math.floor((-236-park.z0)/park.mpp));iz<=Math.min(park.h-1,Math.ceil((-145-park.z0)/park.mpp));iz++)for(let ix=Math.max(0,Math.floor((-1-park.x0)/park.mpp));ix<=Math.min(park.w-1,Math.ceil((87-park.x0)/park.mpp));ix++){
   const index=iz*park.w+ix,x=park.x0+(ix+.5)*park.mpp,z=park.z0+(iz+.5)*park.mpp,old=cats[index]&31;
@@ -140,13 +139,18 @@ function applyGround(cats,park){const oldBuilding=park.buildings[115].pts,oldTic
   if(old===5&&(J.inside(oldBuilding,x,z)||J.inside(oldTicket,x,z)))cats[index]=66;
   if(old===13&&z<-182&&replacesFence(x,z)&&!J.solid(x,z))cats[index]=65;
   if(z>-217&&z<-152&&J.distance(avenue,x,z)<4.5&&![5,12,13].includes(cats[index]&31))cats[index]=67;
-  if(z>-217&&z<-157&&J.distance(avenue,x,z)>4.8&&J.distance(avenue,x,z)<6.25&&x<(z<-193.5?59+(z+193.5)*5/21.5:59+(z+193.5)*5.5/28.5)&&![5,12,13].includes(cats[index]&31))cats[index]=66;
   if(J.distance(approach,x,z)<2.62&&x<54.2&&!J.solid(x,z))cats[index]=66;
   if(rect(x,z,[65.4,-197],7.6,30.0)&&x>61.8&&!J.solid(x,z)&&![5,12,13].includes(cats[index]&31))cats[index]=66;
-  if((J.inside(forecourt,x,z)||J.distance(rearWalk,x,z)<1.05||J.distance(westWalk,x,z)<1.45)&&![5,12,13].includes(cats[index]&31))cats[index]=66;
+  if((J.inside(forecourt,x,z)||J.distance(rearWalk,x,z)<1.05)&&![5,12,13].includes(cats[index]&31))cats[index]=66;
+  // The photos show grass beside the asphalt, not a parallel walk or a spur to the courts.
+  const roadX=z<-193.5?59+(z+193.5)*5/21.5:z<-165?59+(z+193.5)*5.5/28.5:64.5+(z+165)*2.5/13;
+  const courtX=z<-168.54?42:Math.max(42,39.05+(z+168.54)*4.25/23.34+.50);
+  if(z>-217&&z<-145&&x>courtX&&x<roadX-4.5&&J.distance(approach,x,z)>2.9&&[1,2,8,11].includes(cats[index]&31))cats[index]=65;
+  // A small asphalt recess supports the existing bench without creating a tiled sidewalk.
+  if(rect(x,z,[54.5,-188.5],6.6,3.2)&&![4,5,12,13].includes(cats[index]&31))cats[index]=67;
   if(solid(x,z))cats[index]=77;
  }
 }
-const api={signsEnabled:true,avenue,approach,gate,hotdog,meal,fresh,coffee,gurman,picnic,forecourt,rearWalk,westWalk,courtFence,shade,ticket,wall,southWall,bench,bin,trees,pots,covered,innerHedge,foodStalls,courtStalls,safariGate,avenueDetails,sportsFence,label,solid,clearsTree,replacesFence,applyGround};
+const api={signsEnabled:true,avenue,approach,gate,hotdog,meal,fresh,coffee,gurman,picnic,forecourt,rearWalk,courtFence,shade,ticket,wall,southWall,bench,bin,trees,pots,covered,innerHedge,foodStalls,courtStalls,safariGate,avenueDetails,sportsFence,label,solid,clearsTree,replacesFence,applyGround};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkSafariAvenue=api;
 })(typeof window!=='undefined'?window:globalThis);

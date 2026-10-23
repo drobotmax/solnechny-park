@@ -47,8 +47,8 @@ with sync_playwright() as p:
  end=drive('forecourt_entry',63,-189.6,math.pi/2,until='__car.x>73');assert end[0]>72,'the stroller must cross the former coffee footprint'
  end=drive('between_rear_stalls',74,-189.6,math.pi/2,until='__car.x>79.6');assert end[0]>79.6,'the rear passage must remain open between kiosks'
  drive('behind_stalls',80,-188.8,math.pi,ms=1700)
- drive('west_branch',56,-181.6,4.05,ms=2400)
- drive('court_outside_walk',44.2,-165,2.99,ms=1500)
+ drive('through_safari_gate',38.5,-192.2,math.pi*1.5,ms=2500)
+ drive('asphalt_beside_lawn',58.0,-180,2.94,ms=1500)
  for name,x,z in [('fresh',77.1,-192.3),('coffee',77.2,-186.8),('gurman',68.5,-182.7),('picnic',71,-168.8),('bench',52.2,-188.5),('sports_fence',39.05,-168.54)]:drive(name,x,z,0,blocked=True)
  check(page);(out/'progress.json').write_text(json.dumps(report,indent=2)+'\n');page.close()
  phone=browser.new_page(viewport={'width':390,'height':844},device_scale_factor=3,is_mobile=True,has_touch=True);phone.set_default_timeout(120000);phone.on('pageerror',lambda e:errors.append(str(e)))
