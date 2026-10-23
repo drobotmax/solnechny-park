@@ -97,9 +97,9 @@ function cafe(g,e){
  for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length];t.quad([a[0],.03,a[1]],[b[0],.03,b[1]],[b[0],top,b[1]],[a[0],top,a[1]],wood,12);}
  // The L-shaped mapped body stays low behind the outdoor terrace.
  for(const part of [[0,1,4,5],[1,2,3,4]]){const v=part.map(i=>[p[i][0],top,p[i][1]]);t.quad(...v,[.27,.22,.18],14);}
- const a=[44,-284],b=[37,-316],ang=Math.atan2(b[1]-a[1],b[0]-a[0]),s=frame(g,a[0],a[1],ang),len=Math.hypot(b[0]-a[0],b[1]-a[1]);
- s.box(len/2,.015,3.1,len,.055,6.2,[.43,.37,.29],1);
- for(let u=1.4;u<len;u+=4.6){
+ const {a,angle:ang,length:len,start,planters}=Gardens.cafe,s=frame(g,a[0],a[1],ang);
+ s.box((start+len)/2,.015,3.50,len-start,.055,7.4,[.56,.54,.46],1);
+ for(const u of planters){
   s.box(u,.035,0,3.4,.60,.65,C.white);for(let h=.15;h<.6;h+=.15)s.beam([u-1.66,h,-.34],[u+1.66,h,-.34],.014,[.68,.69,.61]);
   const world=s.at(u,0,3),q=frame(g,world[0],world[2]);
   q.beam([0,.07,0],[0,3.15,0],.04,[.64,.62,.53]);

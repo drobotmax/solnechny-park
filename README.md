@@ -16,6 +16,7 @@ python3 -m http.server 8791 --bind 127.0.0.1
 - Центральная аллея: http://127.0.0.1:8791/park.html?preview=central-alley&grain=0
 - Обратная сторона аллеи: http://127.0.0.1:8791/park.html?preview=central-west&grain=0
 - Следующий участок главной аллеи: http://127.0.0.1:8791/park.html?preview=main-avenue&grain=0
+- Главный вход «Тропиканки»: http://127.0.0.1:8791/park.html?preview=tropikanka&grain=0
 - Просмотрщик сканов: http://127.0.0.1:8791/index.html
 - Материалы съёмки: http://127.0.0.1:8791/capture.html
 
