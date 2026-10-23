@@ -13,6 +13,7 @@ python3 -m http.server 8791 --bind 127.0.0.1
 - Игра: http://127.0.0.1:8791/park.html
 - Сразу к фонтанам: http://127.0.0.1:8791/park.html?tour=fountains
 - Кафе «Веранда»: http://127.0.0.1:8791/park.html?preview=veranda&grain=0
+- Центральная аллея: http://127.0.0.1:8791/park.html?preview=central-alley&grain=0
 - Просмотрщик сканов: http://127.0.0.1:8791/index.html
 - Материалы съёмки: http://127.0.0.1:8791/capture.html
 
@@ -349,3 +350,16 @@ Their footprints come from OSM; dimensions and details follow a user-supplied pa
 and remain approximate. Their visible fronts face the bridge approach, with the stage
 slightly angled and the cafe set across the bridge axis. Reference notes record the
 mapped objects and limits.
+
+### Центральная аллея
+
+Участок восстановлен по пяти последовательным поворотам панорамы из одной точки.
+Со стороны аллеи к площади слева — каменная клумба с белой отсыпкой и туями;
+справа — зонтичная карусель, машинки вокруг сигнальной башни и свадебная карусель.
+За боковым проходом расположены игровые прилавки и кафе с белыми зонтами,
+деревянными лавками, кашпо и фигурой мороженого. Добавлены цветные лопасти
+на основаниях, шарообразные ограничители и взрослые деревья.
+Положение объектов следует OSM, размеры и невидимые детали приблизительны.
+Высокие типовые корпуса рядом с каруселями заменены маленькими будками.
+Пять сравнительных видов и ограничения описаны в
+[заметке о центральной аллее](docs/references/central-alley.md).
