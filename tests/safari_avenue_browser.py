@@ -46,7 +46,7 @@ with sync_playwright() as p:
  drive('hotdog_counter',60.8,-203.2,math.pi/2,ms=1500)
  drive('meal_counter',62,-197.9,math.pi/2,ms=1000)
  drive('sidewalk',50.5,-210.0,2.94,ms=1400)
- for name,x,z in [('hotdog',65.7,-203.2),('meals',67.4,-197.9),('coffee',67.5,-189.6),('picnic',68.4,-178.8),('ticket',33,-199.6),('gate_pier',35.5,-195.4),('stone_wall',34.8,-210),('bench',52.2,-188.5),('bin',52.4,-186.7),('inner_greenery',26.5,-192)]:drive(name,x,z,0,blocked=True)
+ for name,x,z in [('hotdog',65.7,-203.2),('meals',67.4,-197.9),('coffee',77.2,-186.8),('picnic',71.0,-168.8),('ticket',33,-199.6),('gate_pier',35.5,-195.4),('stone_wall',34.8,-210),('bench',52.2,-188.5),('bin',52.4,-186.7),('inner_greenery',26.5,-192)]:drive(name,x,z,0,blocked=True)
  check(page);(out/'progress.json').write_text(json.dumps(report,indent=2)+'\n');page.close()
  phone=browser.new_page(viewport={'width':390,'height':844},device_scale_factor=3,is_mobile=True,has_touch=True);phone.set_default_timeout(120000);phone.on('pageerror',lambda e:errors.append(str(e)))
  ready(phone,preview=True);assert phone.locator('#pad [data-k="up"]').is_visible();assert phone.evaluate('document.documentElement.scrollWidth<=innerWidth')

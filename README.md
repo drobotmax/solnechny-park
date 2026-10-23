@@ -18,6 +18,7 @@ python3 -m http.server 8791 --bind 127.0.0.1
 - Следующий участок главной аллеи: http://127.0.0.1:8791/park.html?preview=main-avenue&grain=0
 - Главный вход «Тропиканки»: http://127.0.0.1:8791/park.html?preview=tropikanka&grain=0
 - Киоски и Сафари-парк: http://127.0.0.1:8791/park.html?preview=safari-avenue&grain=0
+- Площадка киосков дальше по аллее: http://127.0.0.1:8791/park.html?preview=food-court&grain=0
 - Следующий перекрёсток: http://127.0.0.1:8791/park.html?preview=avenue-junction&grain=0
 - Паровозик на аллее: http://127.0.0.1:8791/park.html?preview=avenue-train&grain=0
 - Просмотрщик сканов: http://127.0.0.1:8791/index.html

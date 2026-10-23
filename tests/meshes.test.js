@@ -12,7 +12,7 @@ test('detailed landmarks contain finite nondegenerate triangles, unit normals an
    assert(v[1]>=-.001&&v[1]<20,e.id);
   }
  }
- assert(total*40<14*1024*1024,'landmark mesh payload including the avenue crossroads and Safari frontage must stay below 14 MiB');
+ assert(total*40<15*1024*1024,'landmark mesh payload including the food forecourt and sports fence must stay below 15 MiB');
 });
 test('mapped models retain their footprints; plaza stage uses the corrected smaller placement',()=>{
  const models=entries(park);assert.equal(new Set(models.map(e=>e.id)).size,models.length);

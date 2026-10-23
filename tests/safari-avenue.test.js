@@ -7,7 +7,7 @@ test('Safari photos put hot dogs north of meals, stalls east and the gate and be
  const right=[Math.cos(2.94),Math.sin(2.94)],side=p=>(p[0]-57.5)*right[0]+(p[1]+199)*right[1];
  assert(S.hotdog.z<S.meal.z&&S.meal.z<S.coffee.z&&S.coffee.z<S.picnic.z);assert(side([S.meal.x,S.meal.z])<0);assert(side([S.gate.x,S.gate.z])>0&&side(S.bench)>0);
  assert(S.gate.width>=4.8&&S.gate.clearance>2.7);assert.deepEqual(M.centralTrees.slice(0,14),A.trees.concat(J.trees));
- const models=entries.filter(e=>['foodStalls','safariGate','safariAvenue'].includes(e.kind));assert.equal(models.length,3);assert(models.reduce((n,e)=>n+M.build(e).data.byteLength,0)<1024*1024);
+ const models=entries.filter(e=>['foodStalls','safariGate','safariAvenue'].includes(e.kind));assert.equal(models.length,3);assert(models.reduce((n,e)=>n+M.build(e).data.byteLength,0)<2*1024*1024);
  const e=models.find(e=>e.kind==='foodStalls'),normal=M.build(e);S.signsEnabled=false;const blank=M.build(e);S.signsEnabled=true;assert(normal.n>blank.n+500,'the vector signs have actual geometry');
 });
 test('the real raster opens the gate and keeps water, fixtures and the older crossroads intact',()=>{

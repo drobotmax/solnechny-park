@@ -2414,7 +2414,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261023-safari1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261023-court1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2639,6 +2639,9 @@
     if(preview==='stroller'){
       startGame('free');car.x=10;car.z=-390;car.heading=0;car.v=0;
       cam.yaw=car.heading;cam.orbit=-.65;cam.pitch=.18;cam.dist=canvas.width<canvas.height?3:2.1;cam.top=false;
+    }else if(preview==='food-court'){
+      startGame('free');car.x=60;car.z=-189;car.heading=1.45;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?4.5:3.5;cam.top=false;
     }else if(preview==='safari-avenue'){
       startGame('free');car.x=57.5;car.z=-199;car.heading=1.45;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?4.5:3.5;cam.top=false;
