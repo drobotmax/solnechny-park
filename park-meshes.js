@@ -64,7 +64,8 @@ function entries(park){
  .concat([{id:'plaza-stage',cx:stageCenter[0],cz:stageCenter[1],kind:'plazaStage',pts:plazaStageFootprint},
   {id:'entrance-landing',cx:10.6,cz:-419.9,kind:'bridgeLanding',pts:bridgeLandingAxis},
   {id:'central-alley',cx:24,cz:-337,kind:'centralAlley',pts:CentralAlley.bed},
-  {id:'central-west',cx:12,cz:-329,kind:'centralWest',pts:CentralAlley.westBed}]);
+  {id:'central-west',cx:12,cz:-329,kind:'centralWest',pts:CentralAlley.westBed},
+  {id:'main-avenue',cx:28,cz:-299,kind:'mainAvenue',pts:CentralAlley.continuationBed}]);
 }
 function forestEntries(trees){
  const sectors=new Map();
@@ -532,7 +533,7 @@ function pendulum(g,e){
  }
 }
 function build(e){
- const g=new Geometry();({building,bikeCafe,tutCoffee,bridgeLanding,plazaStage,bumper,carousel,coaster,spinner,train,swingTower,pendulum,forest,bridgeRails,ticketOffice:TicketOffice.build,transylvania:Transylvania.build,upsideDownHouse:UpsideDownHouse.build,policePost:HouseSurroundings.cabin,shoreTicket:HouseSurroundings.cabin,shoreMooring:HouseSurroundings.mooring,veranda:Veranda.main,verandaGazebo:Veranda.gazebo,carCarousel:CentralAlley.carCarousel,toyCarousel:CentralAlley.toyCarousel,weddingCarousel:CentralAlley.weddingCarousel,kiddieCarousel:CentralAlley.kiddieCarousel,airTrack:CentralAlley.airTrack,serviceKiosk:CentralAlley.serviceKiosk,centralWest:CentralAlley.westGarden,alleyCafe:CentralAlley.cafe,arcade:CentralAlley.arcade,rideBooth:CentralAlley.booth,centralAlley:CentralAlley.avenue}[e.kind])(g,e);
+ const g=new Geometry();({building,bikeCafe,tutCoffee,bridgeLanding,plazaStage,bumper,carousel,coaster,spinner,train,swingTower,pendulum,forest,bridgeRails,ticketOffice:TicketOffice.build,transylvania:Transylvania.build,upsideDownHouse:UpsideDownHouse.build,policePost:HouseSurroundings.cabin,shoreTicket:HouseSurroundings.cabin,shoreMooring:HouseSurroundings.mooring,veranda:Veranda.main,verandaGazebo:Veranda.gazebo,carCarousel:CentralAlley.carCarousel,toyCarousel:CentralAlley.toyCarousel,weddingCarousel:CentralAlley.weddingCarousel,kiddieCarousel:CentralAlley.kiddieCarousel,airTrack:CentralAlley.airTrack,serviceKiosk:CentralAlley.serviceKiosk,centralWest:CentralAlley.westGarden,mainAvenue:CentralAlley.mainGarden,alleyCafe:CentralAlley.cafe,arcade:CentralAlley.arcade,rideBooth:CentralAlley.booth,centralAlley:CentralAlley.avenue}[e.kind])(g,e);
  if(e.kind==='upsideDownHouse')HouseSurroundings.stairs(g,e);
  const data=new Float32Array(g.data);let radius=0;
  for(let i=0;i<data.length;i+=10)radius=Math.max(radius,Math.hypot(data[i]-e.cx,data[i+1]-5,data[i+2]-e.cz));

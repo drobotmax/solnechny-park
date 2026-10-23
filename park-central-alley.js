@@ -1,10 +1,11 @@
 // Central avenue reconstructed from a complete user panorama sweep.
 (function(root){
 'use strict';
+const Gardens=typeof module!=='undefined'&&module.exports?require('./park-avenue-gardens.js'):root.ParkAvenueGardens;
 const C={white:[.89,.87,.79],red:[.73,.14,.13],yellow:[.91,.66,.16],blue:[.12,.43,.64],dark:[.13,.17,.17],green:[.15,.34,.16],wood:[.42,.27,.16]};
 const axis=[[11.51,-390.42],[19.06,-369.17],[27.6,-327.78],[36.04,-295],[41,-274]],sidePath=[[27.6,-327.78],[43.66,-331.76],[46.42,-332.45],[82.6,-342.02]];
 const bed=[[13.8,-367],[20.4,-340.5],[20.8,-337.5],[17,-336],[9,-337],[4,-363]];
-const trees=[[30.3,-347,15,5.5],[32,-331.5,16,6],[37,-313,15,5.5],[17.2,-343,15,6],[22,-319,15,5.5],[9,-340.4,16,5.7],[4,-320,15,6]];
+const trees=[[30.3,-347,15,5.5],[32,-331.5,16,6],[37,-313,15,5.5],[17.2,-343,15,6],[22,-319,15,5.5],[9,-340.4,16,5.7],[4,-320,15,6]].concat(Gardens.trees);
 const flags=[[13.6,-367],[24.4,-369.2],[36.4,-315]];
 const westBed=[[20.5,-329],[27,-304],[22.5,-301],[16.2,-324]],westPath=[[26,-334],[20,-335.3],[11,-336],[-3,-334.5],[-16,-337.5]];
 const kiddie=[15,-330.5],westFlag=[21.5,-328.4],shutter=[6,-340.2];
@@ -14,7 +15,7 @@ function nearest(line,x,z){let best={distance:1e9,s:0};let acc=0;for(let i=1;i<l
  if(distance<best.distance)best={distance,s:acc+len*u};acc+=len;}return best;}
 function inside(p,x,z){let hit=false;for(let i=0,j=p.length-1;i<p.length;j=i++)if((p[i][1]>z)!==(p[j][1]>z)&&x<(p[j][0]-p[i][0])*(z-p[i][1])/(p[j][1]-p[i][1])+p[i][0])hit=!hit;return hit;}
 function circle(x,z,r,n=24){return Array.from({length:n},(_,i)=>[x+Math.cos(i*Math.PI*2/n)*r,z+Math.sin(i*Math.PI*2/n)*r]);}
-function clearsTree(x,z){return z> -380&&z< -275&&(nearest(axis,x,z).distance<5.1||nearest(sidePath,x,z).distance<2.8||nearest(westPath,x,z).distance<2.3||inside(bed,x,z)||inside(westBed,x,z)||Math.hypot(x-kiddie[0],z-kiddie[1])<3.8||(x>8&&x<22&&z> -333&&z< -318)||trees.some(t=>Math.hypot(x-t[0],z-t[1])<2.6));}
+function clearsTree(x,z){return Gardens.clearsTree(x,z)||z> -380&&z< -275&&(nearest(axis,x,z).distance<5.1||nearest(sidePath,x,z).distance<2.8||nearest(westPath,x,z).distance<2.3||inside(bed,x,z)||inside(westBed,x,z)||Math.hypot(x-kiddie[0],z-kiddie[1])<3.8||(x>8&&x<22&&z> -333&&z< -318)||trees.some(t=>Math.hypot(x-t[0],z-t[1])<2.6));}
 function frame(g,x,z,a=0){
  const c=Math.cos(a),s=Math.sin(a),at=(u,y,v)=>[x+c*u-s*v,y,z+s*u+c*v];
  const quad=(a,b,c,d,col,mat=7)=>g.quad(at(...a),at(...b),at(...c),at(...d),col,mat),tri=(a,b,c,col,mat=7)=>g.tri(at(...a),at(...b),at(...c),col,mat);
@@ -100,7 +101,6 @@ function cafe(g,e){
  s.box(len/2,.015,3.1,len,.055,6.2,[.43,.37,.29],1);
  for(let u=1.4;u<len;u+=4.6){
   s.box(u,.035,0,3.4,.60,.65,C.white);for(let h=.15;h<.6;h+=.15)s.beam([u-1.66,h,-.34],[u+1.66,h,-.34],.014,[.68,.69,.61]);
-  for(let j=0;j<5;j++){s.cone(u-1.2+j*.6,.61,0,.35,.35,C.green,6);s.cone(u-1.2+j*.6,.88,0,.13,.14,C.white,6);}
   const world=s.at(u,0,3),q=frame(g,world[0],world[2]);
   q.beam([0,.07,0],[0,3.15,0],.04,[.64,.62,.53]);
   for(let i=0;i<8;i++){const v=i*Math.PI/4,w=(i+1)*Math.PI/4;q.tri([Math.cos(v)*3.15,2.72,Math.sin(v)*3.15],[Math.cos(w)*3.15,2.72,Math.sin(w)*3.15],[0,3.45,0],i%2?[.86,.85,.78]:[.96,.94,.87]);}
@@ -111,6 +111,7 @@ function cafe(g,e){
  // Game counters occupy the north wing beside the hot-dog corner.
  arcade(g,{pts:[p[1],[p[1][0]+(p[2][0]-p[1][0])*.54,p[1][1]+(p[2][1]-p[1][1])*.54]]});
  const ice=frame(g,40,-316);ice.cone(0,.05,0,.07,1.14,[.80,.56,.25],10,.30);for(let i=0;i<4;i++)ice.cone(0,1.12+i*.14,0,.34-i*.065,.22,i%2?C.white:C.red,10);
+ Gardens.cafeDetails(g);
 }
 function arcade(g,e){const a=e.pts[0],b=e.pts[1],len=Math.hypot(b[0]-a[0],b[1]-a[1]),t=frame(g,a[0],a[1],Math.atan2(b[1]-a[1],b[0]-a[0]));
  t.box(len/2,.03,2.2,len,2.55,4.4,C.dark);t.box(len/2,2.53,1.9,len+.5,.22,5.0,[.24,.19,.16]);t.box(len/2,2.15,-.20,len,.48,.30,C.red);label(t,'ИГРОТЕКА',len/2,2.25,-.38,.26,C.yellow,-1);
@@ -159,9 +160,8 @@ function shrub(t,x,z,r,col=C.green){t.oval(x,.25+r*.27,z,r,r*.42,r*.86,col,16);}
 function hydrangea(t,x,z,r){shrub(t,x,z,r);for(let i=0;i<8;i++){const a=i*2.4,dx=Math.cos(a)*r*.65,dz=Math.sin(a)*r*.60;t.oval(x+dx,.45+r*.37+Math.sin(i)*.12,z+dz,.18,.12,.17,i%3?[.88,.85,.69]:[.83,.57,.61]);}}
 function westGarden(g){const t=frame(g,0,0);
  for(let i=0;i<westBed.length;i++){const a=westBed[i],b=westBed[(i+1)%westBed.length];t.beam([a[0],.20,a[1]],[b[0],.20,b[1]],.20,[.58,.48,.36],1);t.beam([a[0],.41,a[1]],[b[0],.41,b[1]],.065,C.white,1);}
- for(let i=1;i<westBed.length-1;i++)t.tri([westBed[0][0],.04,westBed[0][1]],[westBed[i][0],.04,westBed[i][1]],[westBed[i+1][0],.04,westBed[i+1][1]],[.88,.87,.79],1);
+ for(let i=1;i<westBed.length-1;i++)t.tri([westBed[0][0],.04,westBed[0][1]],[westBed[i][0],.04,westBed[i][1]],[westBed[i+1][0],.04,westBed[i+1][1]],[.24,.36,.18],16);
  for(let i=0;i<5;i++){const x=20.8+i*1.10,z=-324+i*4.6,h=4.1+i%2*.8;t.cone(x,.20,z,.82,h,[.09,.25,.13],16,.04,16);
-  for(let k=0;k<22;k++){const a=k*2.4,y=.4+k*h/24,r=.83*(1-y/(h+.4));t.beam([x+Math.cos(a)*r,y,z+Math.sin(a)*r],[x+Math.cos(a+.35)*(r+.12),y+.19,z+Math.sin(a+.35)*(r+.12)],.045,[.13,.29,.15],16,3);}
  }
  for(let i=0;i<28;i++){const u=i/27,x=20.1+6.5*u,z=-327+22.4*u;shrub(t,x,z,.32);flower(t,x,.48,z,i%3?C.yellow:C.white);}
  for(const [x,z,r] of [[19.9,-326.1,1.05],[22,-324.7,.7],[24.0,-311.8,.8],[19.1,-338.5,1.1],[16.9,-341,.85]])hydrangea(t,x,z,r);
@@ -219,7 +219,8 @@ function applyGround(cats,park,entries){
   if(stairs.length&&inside(stairs,x,z))cats[index]=77;
   if(Math.abs(x-shutter[0])<1.2&&Math.abs(z-shutter[1])<1.0)cats[index]=69;
  }
+ Gardens.applyGround(cats,park);
 }
-const api={axis,bed,westBed,westPath,kiddie,trees,clearsTree,carCarousel,toyCarousel,weddingCarousel,kiddieCarousel,airTrack,airPosts,airStairs,serviceKiosk,westGarden,cafe,arcade,booth,avenue,footprint,applyGround};
+const api={axis,bed,westBed,westPath,kiddie,trees,clearsTree,carCarousel,toyCarousel,weddingCarousel,kiddieCarousel,airTrack,airPosts,airStairs,serviceKiosk,westGarden,cafe,arcade,booth,avenue,footprint,applyGround,mainGarden:Gardens.garden,continuationBed:Gardens.bed};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkCentralAlley=api;
 })(typeof window!=='undefined'?window:globalThis);
