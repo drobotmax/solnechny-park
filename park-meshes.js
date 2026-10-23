@@ -6,6 +6,7 @@ const Transylvania=typeof module!=='undefined'&&module.exports?require('./park-t
 const UpsideDownHouse=typeof module!=='undefined'&&module.exports?require('./park-upside-down-house.js'):root.ParkUpsideDownHouse;
 const HouseSurroundings=typeof module!=='undefined'&&module.exports?require('./park-house-surroundings.js'):root.ParkHouseSurroundings;
 const Veranda=typeof module!=='undefined'&&module.exports?require('./park-veranda.js'):root.ParkVeranda;
+const AvenueTrain=typeof module!=='undefined'&&module.exports?require('./park-avenue-train.js'):root.ParkAvenueTrain;
 const CentralAlley=typeof module!=='undefined'&&module.exports?require('./park-central-alley.js'):root.ParkCentralAlley;
 const buildingIds=[3,4,5,6,7,47,48,49,50,67,77,81,113,122,123], rideIds=[0,1,2,3,6,8,9,17,23,25,26,27,28,29,36];
 // Placed and scaled to the stage rectangle marked in the user's plaza screenshot.
@@ -539,6 +540,6 @@ function build(e){
  for(let i=0;i<data.length;i+=10)radius=Math.max(radius,Math.hypot(data[i]-e.cx,data[i+1]-5,data[i+2]-e.cz));
  return {data,n:data.length/10,center:[e.cx,5,e.cz],radius};
 }
-const api={Geometry,entries,forestEntries,bridgeEntries,bridgeFrame,bridgeSpec,bridgeWalkRise,applyBridgeGround,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec,verandaClearsTree:Veranda.clearsTree,centralClearsTree:CentralAlley.clearsTree,centralTrees:CentralAlley.trees};
+const api={Geometry,entries,forestEntries,bridgeEntries,bridgeFrame,bridgeSpec,bridgeWalkRise,applyBridgeGround,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec,verandaClearsTree:Veranda.clearsTree,centralClearsTree:(x,z)=>CentralAlley.clearsTree(x,z)||AvenueTrain.clearsTree(x,z),centralTrees:CentralAlley.trees};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkMeshes=api;
 })(typeof window!=='undefined'?window:globalThis);

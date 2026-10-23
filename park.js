@@ -467,7 +467,7 @@
     }
   `, ['uForward','uRight','uUp','uAspect','uTanFov']);
   var skyVAO=gl.createVertexArray();
-  var meshes=null, meshContacts=null;
+  var meshes=null, meshContacts=null, groundContacts=null, avenueTrain=null, trainMeshes=null, trainMeshBytes=0;
 
   // Point cloud under construction: position, RGBA, world size.
   function Cloud() { this.pos = []; this.col = []; this.size = []; }
@@ -1438,6 +1438,7 @@
     for (var e = -1; e <= 1; e += 2) {
       var cx = x + sx * off * e, cz = z + sz * off * e;
       if (SOLID[catAt(cx, cz)] || SOLID[catAt(cx + RAD, cz)] || SOLID[catAt(cx - RAD, cz)] || SOLID[catAt(cx, cz + RAD)] || SOLID[catAt(cx, cz - RAD)]) return true;
+      if (avenueTrain && ParkAvenueTrain.blockedAt(avenueTrain,cx,cz,RAD)) return true;
       if (nearTrunk(cx, cz, RAD + 0.25)) return true;
     }
     return false;
@@ -1817,7 +1818,8 @@
     colorUniforms(G);
     gl.uniformMatrix4fv(G.uView, false, view);
     gl.uniformMatrix4fv(G.uProj, false, proj);
-    gl.uniform1i(G.uContactN,meshContacts.length/4);gl.uniform4fv(G.uContact,meshContacts);
+    avenueTrain.units.forEach(function(p,i){var c=Math.abs(Math.cos(p.heading)),s=Math.abs(Math.sin(p.heading)),l=ParkAvenueTrain.spec.lengths[i]*.42;groundContacts.set([p.x,p.z,c*.62+s*l,s*.62+c*l],meshContacts.length+i*4);});
+    gl.uniform1i(G.uContactN,groundContacts.length/4);gl.uniform4fv(G.uContact,groundContacts);
     gl.uniform4f(G.uFrame, park.x0, park.z0, park.w * park.mpp, park.h * park.mpp);
     gl.uniform1f(G.uTime, time);
     gl.uniform1f(G.uFogNear, fogNear); gl.uniform1f(G.uFogFar, fogFar);
@@ -1852,7 +1854,24 @@
       if(!ParkPerformance.visible(view,m.center[0],m.center[1],m.center[2],m.radius,fov,canvas.width/canvas.height,fogFar+30))return;
       gl.bindVertexArray(m.vao);gl.drawArrays(gl.TRIANGLES,0,m.n);meshTriangles+=m.n/3;calls++;
     });
-    window.__stats.mesh={triangles:meshTriangles,resident:meshes.resident.size,bytes:meshBytes};
+    // The train reuses a wheel mesh and transforms each carriage along its travelled path.
+    var trainTriangles=0,trainVisible=0;
+    function drawTrainPart(part,transform){gl.uniformMatrix4fv(M.uModel,false,transform);gl.bindVertexArray(part.vao);gl.drawArrays(gl.TRIANGLES,0,part.n);trainTriangles+=part.n/3;calls++;}
+    avenueTrain.units.forEach(function(unit,i){
+      if(!ParkPerformance.visible(view,unit.x,1,unit.z,2.8,fov,canvas.width/canvas.height,fogFar+30))return;
+      trainVisible++;
+      var base=yawMat(unit.heading,unit.x,ParkMeshes.terrainHeight(unit.x,unit.z),unit.z);
+      drawTrainPart(trainMeshes[['engine','blue','yellow','red'][i]],base);
+      ParkAvenueTrain.spec.axles[i].forEach(function(z){[-1,1].forEach(function(side){drawTrainPart(trainMeshes.wheel,mat4mul(base,ParkAvenueTrain.wheelPose(side*.73,z,avenueTrain.travel)));});});
+      if(i===0)return;
+      var prev=avenueTrain.units[i-1],lengths=ParkAvenueTrain.spec.lengths;
+      var ax=prev.x-Math.sin(prev.heading)*lengths[i-1]/2,az=prev.z+Math.cos(prev.heading)*lengths[i-1]/2;
+      var bx=unit.x+Math.sin(unit.heading)*lengths[i]/2,bz=unit.z-Math.cos(unit.heading)*lengths[i]/2,dx=bx-ax,dz=bz-az,len=Math.hypot(dx,dz);
+      if(len>.001)drawTrainPart(trainMeshes.coupler,[dz/len,0,-dx/len,0,0,1,0,0,dx,0,dz,0,ax,.40,az,1]);
+    });
+    gl.uniformMatrix4fv(M.uModel,false,IDENT);
+    window.__stats.train={distance:avenueTrain.distance,speed:avenueTrain.speed,waiting:avenueTrain.waiting,phase:avenueTrain.units[0].phase,units:avenueTrain.units.map(function(p){return {x:p.x,z:p.z,heading:p.heading};}),visible:trainVisible,triangles:trainTriangles,bytes:trainMeshBytes};
+    window.__stats.mesh={triangles:meshTriangles+trainTriangles,resident:meshes.resident.size,bytes:meshBytes+trainMeshBytes};
 
     gl.useProgram(P.prog);
     colorUniforms(P);
@@ -2145,6 +2164,7 @@
     } else {
       cam.orbit += dt * 0.15;                     // menu: slow turn around the stroller
     }
+    if(avenueTrain&&!avenueTrain.paused)ParkAvenueTrain.update(avenueTrain,dt,car);
     // chase camera: critically damped follow, a look-around drag eases back while driving
     var dy = car.heading - cam.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     cam.yaw += dy * Math.min(1, dt * 4);
@@ -2393,7 +2413,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261023-tropikanka1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261023-train1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2441,6 +2461,7 @@
     ParkHouseSurroundings.applyGround(cats,park,meshEntries);
     ParkVeranda.applyGround(cats,park,meshEntries);
     ParkCentralAlley.applyGround(cats,park,meshEntries);
+    ParkAvenueTrain.applyGround(cats,park);
     ParkMeshes.applyBridgeGround(cats,park);
     for(var z=-440;z<=-400;z+=park.mpp)for(var x=-22;x<=43;x+=park.mpp){
       var zone=ParkMeshes.landingZone(x,z);
@@ -2592,6 +2613,10 @@
       window.__stats.stroller={representation:'mesh',scanPoints:0,bodyPoints:0,wheelPoints:0,triangles:stroller.triangles,bodyTriangles:pram.body.n/3,bytes:Object.values(pram).reduce(function(n,p){return n+p.data.byteLength;},0),length:spec.length,width:spec.width};
     }
     window.__stroller=stroller;
+    var trainParts=ParkAvenueTrain.build(ParkMeshes.Geometry);
+    trainMeshes={};Object.keys(trainParts).forEach(function(k){trainMeshes[k]=uploadMeshData(trainParts[k]);trainMeshBytes+=trainParts[k].data.byteLength;});
+    avenueTrain=ParkAvenueTrain.make();window.__train=avenueTrain;
+    groundContacts=new Float32Array(meshContacts.length+16);groundContacts.set(meshContacts);
 
     buildPigeons();
     buildDogs();
@@ -2611,6 +2636,9 @@
     if(preview==='stroller'){
       startGame('free');car.x=10;car.z=-390;car.heading=0;car.v=0;
       cam.yaw=car.heading;cam.orbit=-.65;cam.pitch=.18;cam.dist=canvas.width<canvas.height?3:2.1;cam.top=false;
+    }else if(preview==='avenue-train'){
+      startGame('free');car.x=40.7;car.z=-280;car.heading=2.75;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.12;cam.dist=canvas.width<canvas.height?5:4.5;cam.top=false;
     }else if(preview==='tropikanka'){
       startGame('free');car.x=39.2;car.z=-281.2;car.heading=1.35;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?3.8:3.3;cam.top=false;
