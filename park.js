@@ -220,6 +220,7 @@
     uniform vec3 uEye;
     uniform vec4 uStroller;
     uniform vec4 uContact[16],uFrame;
+    uniform vec4 uRampFrame,uRampShape;
     uniform int uContactN;
     uniform float uTime,uFogNear,uFogFar,uLight;
   ` + COLOR + ParkAtmosphere.glsl + `
@@ -239,9 +240,14 @@
       return gate*lengthMask*(1.-smoothstep(.012,.022+pixel,distance));
     }
     void main(){
-      if(uRampPass==1&&vRampHeight<.002)discard;
       vec2 uv=(vXZ-uFrame.xy)/uFrame.zw;
       int cat=category(uv);
+      if(uRampPass==1&&(vRampHeight<.002||cat==4))discard;
+      // Collision cells are wider than the rail meshes; keep their exposed edges asphalt.
+      vec2 bridgeDelta=vXZ-uRampFrame.xy;
+      float bridgeS=dot(bridgeDelta,uRampFrame.zw);
+      float bridgeL=abs(bridgeDelta.x*uRampFrame.w-bridgeDelta.y*uRampFrame.z);
+      if(cat==13&&bridgeS>=uRampShape.x&&bridgeS<=0.&&bridgeL<5.)cat=3;
       vec3 sat=pow(texture(uAlbedo,uv).rgb,vec3(.8))*1.2;
       float near=1.-smoothstep(12.,45.,vDist);
       // Fade subpixel grain and joints before they shimmer while moving.
@@ -2357,7 +2363,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261022-veranda2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261023-bridge1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2404,6 +2410,7 @@
     ParkUpsideDownHouse.applyGround(cats,park,upsideDownEntry);
     ParkHouseSurroundings.applyGround(cats,park,meshEntries);
     ParkVeranda.applyGround(cats,park,meshEntries);
+    ParkMeshes.applyBridgeGround(cats,park);
     for(var z=-440;z<=-400;z+=park.mpp)for(var x=-22;x<=43;x+=park.mpp){
       var zone=ParkMeshes.landingZone(x,z);
       if(!zone)continue;
@@ -2562,7 +2569,10 @@
     if (benchmark || streamTest) startGame('free');
     if(new URLSearchParams(location.search).get('tour')==='details') visitDetails();
     var preview=new URLSearchParams(location.search).get('preview');
-    if(preview==='veranda'){
+    if(preview==='bridge'){
+      startGame('free');car.x=8.5;car.z=-430;car.heading=-.205;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.18;cam.dist=canvas.width<canvas.height?10:6;cam.top=false;
+    }else if(preview==='veranda'){
       var portrait=canvas.width<canvas.height;
       startGame('free');car.x=portrait?43:49;car.z=portrait?-396:-393;car.heading=portrait?.78:.30;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=portrait?.045:.025;cam.dist=portrait?24:8;cam.top=false;

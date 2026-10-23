@@ -45,7 +45,7 @@ test('bridge landing keeps the road clear between two striped walks and planted 
  const a=landing.pts[0],b=landing.pts[1],length=Math.hypot(b[0]-a[0],b[1]-a[1]);
  const dx=(b[0]-a[0])/length,dz=(b[1]-a[1])/length;
  const point=l=>[a[0]+dx*12+dz*l,a[1]+dz*12-dx*l];
- assert.equal(landingZone(...point(0)),null);
+ assert.equal(landingZone(...point(0)),'road','the continuous asphalt includes the centre of the approach');
  for(const side of [-1,1]){
   assert.equal(landingZone(...point(side*6.5)),'road');
   assert.equal(landingZone(...point(side*11)),'bed');

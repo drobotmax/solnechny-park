@@ -11,12 +11,19 @@ const buildingIds=[3,4,5,6,7,49,50,81,122,123], rideIds=[0,1,2,3,6,9,17,25,26,27
 const plazaStageFootprint=[[49.93,-379.74],[44.53,-369.06],[50.08,-366.26],[55.48,-376.94]];
 const bridgeLandingAxis=[[7.87,-432.91],[13.3,-406.85]];
 const bridgeCityEnd=[-11.88,-527.76];
+// Photo-led estimates: one undivided carriageway, two narrow side walks.
+const bridgeSpec={roadWidth:6,walkWidth:1.6,walkRise:.18,rampLength:2.8};
+function bridgeFrame(){
+ const a=bridgeCityEnd,b=bridgeLandingAxis[0],length=Math.hypot(b[0]-a[0],b[1]-a[1]),dx=(b[0]-a[0])/length,dz=(b[1]-a[1])/length;
+ return {a,b,length,dx,dz,at:(s,l,y=0)=>{const x=a[0]+dx*s+dz*l,z=a[1]+dz*s-dx*l;return [x,terrainHeightBase(x,z)+y,z];},
+  local:(x,z)=>({s:(x-a[0])*dx+(z-a[1])*dz,l:(x-a[0])*dz-(z-a[1])*dx})};
+}
 const rampLength=Math.hypot(bridgeLandingAxis[1][0]-bridgeLandingAxis[0][0],bridgeLandingAxis[1][1]-bridgeLandingAxis[0][1]);
 const rampDirection=[(bridgeLandingAxis[1][0]-bridgeLandingAxis[0][0])/rampLength,(bridgeLandingAxis[1][1]-bridgeLandingAxis[0][1])/rampLength];
 const rampCityS=(bridgeCityEnd[0]-bridgeLandingAxis[0][0])*rampDirection[0]+(bridgeCityEnd[1]-bridgeLandingAxis[0][1])*rampDirection[1];
 const terrainSpec={anchor:bridgeLandingAxis[0],direction:rampDirection,cityS:rampCityS,parkS:rampLength,deckHeight:2};
 function smooth01(t){t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);}
-function terrainHeight(x,z){
+function terrainHeightBase(x,z){
  const s=(x-terrainSpec.anchor[0])*rampDirection[0]+(z-terrainSpec.anchor[1])*rampDirection[1];
  if(s<=rampCityS||s>=rampLength)return 0;
  const l=Math.abs((x-terrainSpec.anchor[0])*rampDirection[1]-(z-terrainSpec.anchor[1])*rampDirection[0]);
@@ -25,11 +32,18 @@ function terrainHeight(x,z){
  const city=smooth01((s-rampCityS)/14),park=1-smooth01(s/rampLength);
  return terrainSpec.deckHeight*Math.min(city,park)*lateral;
 }
+function bridgeWalkRise(x,z){
+ if(z<bridgeCityEnd[1]-2||z>bridgeLandingAxis[0][1]+2||x<bridgeCityEnd[0]-6||x>bridgeLandingAxis[0][0]+6)return 0;
+ const f=bridgeFrame(),{s,l}=f.local(x,z),d=Math.abs(l),half=bridgeSpec.roadWidth/2;
+ if(s<0||s>f.length||d<half+.20||d>half+bridgeSpec.walkWidth-.16)return 0;
+ return .025+bridgeSpec.walkRise*Math.min(1,s/bridgeSpec.rampLength,(f.length-s)/bridgeSpec.rampLength);
+}
+function terrainHeight(x,z){return terrainHeightBase(x,z)+bridgeWalkRise(x,z);}
 function landingZone(x,z){
  const a=bridgeLandingAxis[0],b=bridgeLandingAxis[1],length=Math.hypot(b[0]-a[0],b[1]-a[1]);
  const dx=(b[0]-a[0])/length,dz=(b[1]-a[1])/length;
  const s=(x-a[0])*dx+(z-a[1])*dz,l=Math.abs((x-a[0])*dz-(z-a[1])*dx),half=3.2+.12*s;
- if(s>=0&&s<=25&&l>=half&&l<=half+4.05)return 'road';
+ if(s>=0&&s<=25&&l<=half+4.05)return 'road';
  if(s>=1.5&&s<=23.5&&l>=half+4.45&&l<=half+((x-a[0])*dz-(z-a[1])*dx>0?13-.08*s:12-.05*s))return 'bed';
  return null;
 }
@@ -59,11 +73,25 @@ function forestEntries(trees){
  return [...sectors.values()];
 }
 function bridgeEntries(park){
- const road=park.bridges.find(b=>b.osm_id===27081408);
+ const road=park.bridges.find(b=>b.osm_id===27081408),f=bridgeFrame();
  return park.bridges.filter(b=>b.osm_id===176130545||b.osm_id===176130547).map(b=>{
-  const c=center(b.pts);
-  return {id:'bridge:'+b.osm_id,cx:c[0],cz:c[1],kind:'bridgeRails',pts:b.pts,width:b.w,road:road.pts[0]};
+  const side=Math.sign(f.local(...b.pts[0]).l),c=f.at(f.length/2,side*(bridgeSpec.roadWidth+bridgeSpec.walkWidth)/2);
+  return {id:'bridge:'+b.osm_id,cx:c[0],cz:c[2],kind:'bridgeRails',pts:b.pts,width:bridgeSpec.walkWidth,side,road:road.pts[0]};
  });
+}
+function applyBridgeGround(cats,park){
+ const f=bridgeFrame(),inner=bridgeSpec.roadWidth/2+.10,outer=bridgeSpec.roadWidth/2+bridgeSpec.walkWidth;
+ const x0=Math.max(0,Math.floor((Math.min(f.a[0],f.b[0])-10-park.x0)/park.mpp)),x1=Math.min(park.w-1,Math.ceil((Math.max(f.a[0],f.b[0])+10-park.x0)/park.mpp));
+ const z0=Math.max(0,Math.floor((f.a[1]-3-park.z0)/park.mpp)),z1=Math.min(park.h-1,Math.ceil((f.b[1]+3-park.z0)/park.mpp));
+ for(let iz=z0;iz<=z1;iz++)for(let ix=x0;ix<=x1;ix++){
+  const x=park.x0+(ix+.5)*park.mpp,z=park.z0+(iz+.5)*park.mpp,{s,l}=f.local(x,z),d=Math.abs(l),index=iz*park.w+ix;
+  if(s<0||s>f.length||d>8.5)continue;
+  const flags=cats[index]&64,cat=cats[index]&31;
+  if(d<=outer+.20){
+   const wall=Math.abs(d-outer)<.20||(s>1.8&&s<f.length-1.8&&Math.abs(d-inner)<.18);
+   cats[index]=flags|(wall?13:d<inner?3:2);
+  }else if(s>14&&s<f.length-5&&(cat===2||cat===3))cats[index]=flags|4;
+ }
 }
 function Geometry(){this.data=[];}
 Geometry.prototype.tri=function(a,b,c,color,mat){
@@ -106,30 +134,32 @@ function forest(g,e){
  }
 }
 function bridgeRails(g,e){
- const p=e.pts,stone=[.63,.62,.57],white=[.89,.91,.87];
- const a=p[0],b=p[1],length=Math.hypot(b[0]-a[0],b[1]-a[1]),nx=-(b[1]-a[1])/length,nz=(b[0]-a[0])/length;
- const distance=side=>Math.hypot(a[0]+nx*e.width*.5*side-e.road[0],a[1]+nz*e.width*.5*side-e.road[1]);
- const outer=distance(1)>distance(-1)?1:-1;
- for(const side of [-1,1])for(let j=0;j<p.length-1;j++){
-  const from=p[j],to=p[j+1],len=Math.hypot(to[0]-from[0],to[1]-from[1]);
-  const ux=(to[0]-from[0])/len,uz=(to[1]-from[1])/len;
-  const at=(s,y,offset=0)=>{
-   const x=from[0]+ux*s-uz*(e.width*.5*side+offset),z=from[1]+uz*s+ux*(e.width*.5*side+offset);
-   return [x,terrainHeight(x,z)+y,z];
-  };
-  for(let s=0;s<len;s+=1.5){
-   const end=Math.min(len,s+1.5),half=side===outer?.16:.10,top=side===outer?.34:.22;
-   g.quad(at(s,.02,-half),at(end,.02,-half),at(end,top,-half),at(s,top,-half),stone,1);
-   g.quad(at(end,.02,half),at(s,.02,half),at(s,top,half),at(end,top,half),stone,1);
-   g.quad(at(s,top,-half),at(end,top,-half),at(end,top,half),at(s,top,half),white,1);
-   if(side===outer)g.beam(at(s,1.03),at(end,1.03),.045,white,2,6);
+ const f=bridgeFrame(),len=f.length,stone=[.63,.62,.57],white=[.89,.91,.87],inner=bridgeSpec.roadWidth/2+.10,outer=bridgeSpec.roadWidth/2+bridgeSpec.walkWidth;
+ const at=(s,l,y)=>f.at(s,e.side*l,y),rise=s=>.025+bridgeSpec.walkRise*Math.min(1,s/bridgeSpec.rampLength,(len-s)/bridgeSpec.rampLength);
+ // Both walks stay parallel to the road, including at the ends of the bridge.
+ for(let s=0;s<len;s+=1.5){
+  const end=Math.min(len,s+1.5);
+  g.quad(at(s,inner+.10,rise(s)),at(end,inner+.10,rise(end)),at(end,outer-.16,rise(end)),at(s,outer-.16,rise(s)),[.66,.65,.59],1);
+ }
+ for(const edge of [inner,outer]){
+  const outside=edge===outer,start=outside?0:1.8,stop=outside?len:len-1.8,half=outside?.16:.10,top=outside?.34:.22;
+  for(let s=start;s<stop;s+=1.5){
+   const end=Math.min(stop,s+1.5);
+   g.quad(at(s,edge-half,.02),at(end,edge-half,.02),at(end,edge-half,top),at(s,edge-half,top),stone,1);
+   g.quad(at(end,edge+half,.02),at(s,edge+half,.02),at(s,edge+half,top),at(end,edge+half,top),stone,1);
+   g.quad(at(s,edge-half,top),at(end,edge-half,top),at(end,edge+half,top),at(s,edge+half,top),white,1);
+   g.beam(at(s,edge,1.03),at(end,edge,1.03),.035,white,2,6);
+   if(!outside)g.beam(at(s,edge,.55),at(end,edge,.55),.022,white,2,5);
   }
-  if(side!==outer)continue;
-  for(let s=.1;s<len;s+=3.2)g.beam(at(s,.33),at(s,1.1),.16,stone,1,4);
+  if(!outside){
+   for(let s=start;s<=stop;s+=1.6)g.beam(at(s,edge,.22),at(s,edge,1.06),.032,white,2,5);
+   continue;
+  }
+  for(let s=.1;s<len;s+=3.2)g.beam(at(s,edge,.33),at(s,edge,1.1),.16,stone,1,4);
   for(let s=.8;s<len-.7;s+=1.55)for(let k=0;k<16;k++){
    const t=k*Math.PI/8,t1=(k+1)*Math.PI/8;
-   g.beam(at(s+Math.cos(t)*.63,.66+Math.sin(t)*.32),
-    at(s+Math.cos(t1)*.63,.66+Math.sin(t1)*.32),.026,white,2,5);
+   g.beam(at(s+Math.cos(t)*.63,edge,.66+Math.sin(t)*.32),
+    at(s+Math.cos(t1)*.63,edge,.66+Math.sin(t1)*.32),.026,white,2,5);
   }
  }
 }
@@ -505,6 +535,6 @@ function build(e){
  for(let i=0;i<data.length;i+=10)radius=Math.max(radius,Math.hypot(data[i]-e.cx,data[i+1]-5,data[i+2]-e.cz));
  return {data,n:data.length/10,center:[e.cx,5,e.cz],radius};
 }
-const api={entries,forestEntries,bridgeEntries,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec,verandaClearsTree:Veranda.clearsTree};
+const api={entries,forestEntries,bridgeEntries,bridgeFrame,bridgeSpec,bridgeWalkRise,applyBridgeGround,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec,verandaClearsTree:Veranda.clearsTree};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkMeshes=api;
 })(typeof window!=='undefined'?window:globalThis);

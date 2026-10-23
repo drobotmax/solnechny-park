@@ -1,7 +1,7 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {shadowMap, foliageMask} = require('../park-atmosphere.js');
-const {forestEntries, bridgeEntries, build, terrainHeight} = require('../park-meshes.js');
+const {forestEntries, bridgeEntries, bridgeFrame, bridgeSpec, bridgeWalkRise, applyBridgeGround, build, terrainHeight} = require('../park-meshes.js');
 const park = require('../park/park.json');
 
 test('canopy shade projects away from the sun, has soft edges and capped overlap', () => {
@@ -52,7 +52,7 @@ test('streamed forest meshes retain every mapped trunk and have bounded finite g
   assert.deepEqual(build(entries[0]).data, build(entries[0]).data);
 });
 
-test('solid entrance rails follow the two mapped sidewalks and sloped terrain', () => {
+test('solid entrance rails flank the road and follow sloped terrain', () => {
   const entries = bridgeEntries(park);
   assert.equal(entries.length, 2);
   let total = 0;
@@ -65,9 +65,35 @@ test('solid entrance rails follow the two mapped sidewalks and sloped terrain', 
     for (let i = 0; i < mesh.data.length; i += 10) {
       const [x, y, z] = mesh.data.subarray(i, i + 3);
       assert(Number.isFinite(x + y + z));
-      const height = y - terrainHeight(x, z);
+      const height = y - terrainHeight(x, z) + bridgeWalkRise(x,z);
       assert(height >= -.02 && height < 1.3, 'rails must follow the bridge rather than float');
     }
   }
   assert(total < 4 * 1024 * 1024);
+});
+
+test('the full entrance bridge has a continuous six-metre road without a median or converging curbs',()=>{
+ const f=bridgeFrame();
+ for(const e of bridgeEntries(park)){
+  const mesh=build(e);
+  for(let i=0;i<mesh.data.length;i+=10){
+   const {s,l}=f.local(mesh.data[i],mesh.data[i+2]);
+   assert(Math.abs(l)>=3-1e-4,`bridge furniture intrudes into the carriageway at ${s}, ${l}`);
+  }
+ }
+ const cats=new Uint8Array(park.w*park.h).fill(68),index=(p)=>Math.floor((p[2]-park.z0)/park.mpp)*park.w+Math.floor((p[0]-park.x0)/park.mpp);
+ applyBridgeGround(cats,park);
+ for(let s=.5;s<f.length;s+=.5)for(let l=-2.5;l<=2.5;l+=.5)assert.equal(cats[index(f.at(s,l))]&31,3,`road must be continuous at ${s}, ${l}`);
+ for(const side of [-1,1]){
+  for(const s of [8,f.length/2,f.length-8]){
+   assert.equal(cats[index(f.at(s,side*3.85))]&31,2,'sidewalk is passable');
+   assert.equal(cats[index(f.at(s,side*3.1))]&31,13,'pedestrian guard belongs at the road edge');
+   assert.equal(cats[index(f.at(s,side*4.6))]&31,13,'outer parapet blocks the water edge');
+  }
+  const ramp=f.at(1,side*3.85);
+  assert(bridgeWalkRise(ramp[0],ramp[2])<.12,'walk has a low access ramp');
+ }
+ assert.equal(cats[index(f.at(f.length/2,6))]&31,4,'old oversized side decks are retired');
+ const middle=f.at(20,0);
+ assert.equal(bridgeSpec.roadWidth,6);assert.equal(bridgeWalkRise(middle[0],middle[2]),0);
 });
