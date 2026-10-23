@@ -809,7 +809,7 @@
     park.buildings.forEach(function (b, index) {
       if(ParkMeshes.buildingIds.indexOf(index)!==-1){
         // Preserve the removed point models' palette draws for neighbouring colours.
-        if([4,47,48,67,68,77,113,122,123].indexOf(index)>=0){r();r();}
+        if([4,47,48,67,68,77,113,115,122,123,128].indexOf(index)>=0){r();r();}
         return;
       }
       var p = b.pts, h = b.h, wall = WALLS[Math.floor(r() * WALLS.length)], roof = ROOFS[Math.floor(r() * ROOFS.length)];
@@ -847,6 +847,7 @@
     });
     park.fences.forEach(function (f) {
       polyline(f.pts, 0.3, function (x, z, s) {
+        if(ParkMeshes.safariReplacesFence(x,z))return;
         var post = (s % 2.5) < 0.3;
         for (var y = 0.15; y < f.h; y += post ? 0.15 : 0.45) cl.add(x, y, z, post ? [70, 70, 64] : [96, 112, 92], post ? 0.12 : 0.08, false);
       });
@@ -2413,7 +2414,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261023-junction1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261023-safari1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2462,6 +2463,7 @@
     ParkVeranda.applyGround(cats,park,meshEntries);
     ParkCentralAlley.applyGround(cats,park,meshEntries);
     ParkAvenueJunction.applyGround(cats,park);
+    ParkSafariAvenue.applyGround(cats,park);
     ParkAvenueTrain.applyGround(cats,park);
     ParkMeshes.applyBridgeGround(cats,park);
     for(var z=-440;z<=-400;z+=park.mpp)for(var x=-22;x<=43;x+=park.mpp){
@@ -2637,6 +2639,9 @@
     if(preview==='stroller'){
       startGame('free');car.x=10;car.z=-390;car.heading=0;car.v=0;
       cam.yaw=car.heading;cam.orbit=-.65;cam.pitch=.18;cam.dist=canvas.width<canvas.height?3:2.1;cam.top=false;
+    }else if(preview==='safari-avenue'){
+      startGame('free');car.x=57.5;car.z=-199;car.heading=1.45;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?4.5:3.5;cam.top=false;
     }else if(preview==='avenue-junction'){
       startGame('free');car.x=47.2;car.z=-247.5;car.heading=2.94;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.12;cam.dist=canvas.width<canvas.height?5:4.5;cam.top=false;

@@ -12,7 +12,7 @@ test('detailed landmarks contain finite nondegenerate triangles, unit normals an
    assert(v[1]>=-.001&&v[1]<20,e.id);
   }
  }
- assert(total*40<13*1024*1024,'landmark mesh payload including the avenue crossroads must stay below 13 MiB');
+ assert(total*40<14*1024*1024,'landmark mesh payload including the avenue crossroads and Safari frontage must stay below 14 MiB');
 });
 test('mapped models retain their footprints; plaza stage uses the corrected smaller placement',()=>{
  const models=entries(park);assert.equal(new Set(models.map(e=>e.id)).size,models.length);
@@ -27,7 +27,7 @@ test('mapped models retain their footprints; plaza stage uses the corrected smal
  assert(Math.hypot(stage.cx-51,stage.cz+373.46)<2.5,'stage stays near the marked plaza edge');
  const depth=p=>Math.hypot(p[3][0]-p[0][0],p[3][1]-p[0][1]);
  assert(depth(stage.pts)<depth(cafe.pts)*.3);
- assert.equal(models.length,buildingIds.length+rideIds.length+6);
+ assert.equal(models.length,buildingIds.length+rideIds.length+7);
 });
 test('bike cafe entrance glazing faces the bridge landing and plaza',()=>{
  const cafe=entries(park).find(e=>e.kind==='bikeCafe'),mesh=build(cafe);

@@ -20,7 +20,7 @@ test('the closed route goes both ways along the same avenue and joins both turns
 });
 test('the full convoy stays on the actual corrected asphalt, outside beds, cafes and trunks',()=>{
  const cats=cp.execFileSync('python3',['-c',"from PIL import Image; import sys;sys.stdout.buffer.write(Image.open('park/ground.png').convert('RGB').getchannel('R').tobytes())"],{cwd:require('node:path').resolve(__dirname,'..'),maxBuffer:32*1024*1024});
- A.applyGround(cats,park,M.entries(park));require('../park-avenue-junction').applyGround(cats,park);T.applyGround(cats,park);
+ A.applyGround(cats,park,M.entries(park));require('../park-avenue-junction').applyGround(cats,park);require('../park-safari-avenue').applyGround(cats,park);T.applyGround(cats,park);
  for(let d=0;d<T.length;d+=.35)for(const p of T.poses(d))for(const u of [-.86,0,.86])for(const v of [-T.spec.lengths[p.index]/2,0,T.spec.lengths[p.index]/2]){
   const x=p.x+Math.cos(p.heading)*u+Math.sin(p.heading)*v,z=p.z+Math.sin(p.heading)*u-Math.cos(p.heading)*v,index=Math.floor((z-park.z0)/park.mpp)*park.w+Math.floor((x-park.x0)/park.mpp);
   assert([2,3,6].includes(cats[index]&31),`train leaves pavement: ${x}, ${z}, ${cats[index]&31}`);

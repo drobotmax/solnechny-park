@@ -7,7 +7,7 @@ test('the reference crossroads has terrace and play area on the east and stone w
  assert(side([J.gallery.x,J.gallery.z])<0);assert(side([J.play.x,J.play.z])<0);assert(J.wall.every(p=>side(p)>0));
  const ids=['b68','r45','r46','avenue-junction'];let bytes=0;for(const id of ids){const m=M.build(entries.find(e=>e.id===id));assert(m.n>0);bytes+=m.data.byteLength;}
  assert(bytes<2*1024*1024,'the four new models stay below two MiB');
- assert.deepEqual(M.centralTrees.slice(-3),J.trees);
+ assert.deepEqual(M.centralTrees.slice(11,14),J.trees);
 });
 test('both side walks and terrace gaps are open on the real raster while fixtures block',()=>{
  const cats=corrected(),blocked=(x,z)=>[4,5,12,13].includes(cats[index(x,z)]&31);
