@@ -1,4 +1,4 @@
-// "Молоко для малыша": the scanned stroller from Карасунский.spz rolling
+// "Молоко для малыша": a solid pram inspired by Карасунский.spz rolling
 // through Солнечный остров (Krasnodar), collecting milk bottles.
 //
 // Same pipeline as the viewer: plain WebGL2 into a low-res buffer scaled up
@@ -7,8 +7,8 @@
 // tools/gen_park.py at 0.4 m per cell: surface categories from OpenStreetMap
 // plus tree cover classified from satellite imagery (ground.png) and the
 // satellite colour itself (albedo.jpg). Trees, buildings, rides and props are
-// point clouds baked from park/park.json and streamed by sector, matching
-// the scanned stroller.
+// point clouds baked from park/park.json and streamed by sector. Landmarks
+// and the pram use lit triangle meshes in the same colour stage.
 (function () {
   'use strict';
 
@@ -344,16 +344,16 @@
     layout(location=1) in vec3 aNormal;
     layout(location=2) in vec3 aColor;
     layout(location=3) in float aMaterial;
-    uniform mat4 uView,uProj;
-    out vec3 vPos,vNormal,vColor;
+    uniform mat4 uView,uProj,uModel;
+    out vec3 vPos,vNormal,vColor,vLocal;
     flat out float vMaterial;
     out float vDistance;
-    void main(){vec4 p=uView*vec4(aPos,1.);gl_Position=uProj*p;
-      vPos=aPos;vNormal=aNormal;vColor=aColor;vMaterial=aMaterial;vDistance=-p.z;}
+    void main(){vec4 world=uModel*vec4(aPos,1.),p=uView*world;gl_Position=uProj*p;
+      vPos=world.xyz;vLocal=aPos;vNormal=mat3(uModel)*aNormal;vColor=aColor;vMaterial=aMaterial;vDistance=-p.z;}
   `;
   var MESH_FS = `#version 300 es
     precision highp float;
-    in vec3 vPos,vNormal,vColor;
+    in vec3 vPos,vNormal,vColor,vLocal;
     flat in float vMaterial;
     in float vDistance;
     uniform vec3 uEye;
@@ -416,6 +416,16 @@
         c*=mix(1.,.70+.35*leaf+.20*spray,detail);
         shade=.68+.32*max(0.,dot(n,light));
       }
+      if(vMaterial==17.){
+        float weave=noise(vLocal*640.),fold=noise(vLocal*38.);
+        c*=.94+.065*weave+.035*fold;
+        shade=.69+.31*max(0.,dot(n,light));
+      }
+      if(vMaterial==18.){
+        float groove=step(.82,fract(atan(vLocal.z,vLocal.y)*5.1));
+        c*=.95+.04*noise(vLocal*390.)-.08*groove;
+        shade=.72+.28*max(0.,dot(n,light));
+      }
       if(vMaterial==8.){
         vec3 v=normalize(uEye-vPos);
         vec3 reflection=mix(vec3(.07,.09,.11),daylightSky(reflect(-v,n),uTime),uDay);
@@ -448,7 +458,7 @@
   }
   var P = program(PTS_VS, PTS_FS, ['uModel', 'uFocal', 'uMaxPt', 'uAnim', 'uInstanced', 'uDensity', 'uPointSun', 'uRound', 'uFoliage']);
   var G = program(GROUND_VS, GROUND_FS, ['uGround', 'uAlbedo', 'uShadow', 'uEye', 'uStroller', 'uFrame', 'uContact', 'uContactN', 'uRampFrame', 'uRampShape', 'uRampPass']);
-  var M = program(MESH_VS, MESH_FS, ['uEye', 'uTicketAtlas', 'uRideAtlas', 'uShoreAtlas', 'uVerandaAtlas']);
+  var M = program(MESH_VS, MESH_FS, ['uEye', 'uModel', 'uTicketAtlas', 'uRideAtlas', 'uShoreAtlas', 'uVerandaAtlas']);
   var S = program(ParkAtmosphere.skyVS, ParkAtmosphere.skyFS + COLOR + `
     void main(){
       vec3 ray=normalize(uForward+vScreen.x*uAspect*uTanFov*uRight+vScreen.y*uTanFov*uUp);
@@ -509,7 +519,10 @@
   }
 
   function uploadMesh(entry) {
-    var source=ParkMeshes.build(entry),vao=gl.createVertexArray(),buffer=gl.createBuffer();
+    return uploadMeshData(ParkMeshes.build(entry));
+  }
+  function uploadMeshData(source) {
+    var vao=gl.createVertexArray(),buffer=gl.createBuffer();
     gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,source.data,gl.STATIC_DRAW);
     [3,3,3,1].forEach(function(size,i){gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,gl.FLOAT,false,40,i*12);});
     gl.bindVertexArray(null);
@@ -1831,6 +1844,7 @@
     gl.activeTexture(gl.TEXTURE6);gl.bindTexture(gl.TEXTURE_2D,shoreAtlasTex);gl.uniform1i(M.uShoreAtlas,6);
     gl.activeTexture(gl.TEXTURE7);gl.bindTexture(gl.TEXTURE_2D,verandaAtlasTex);gl.uniform1i(M.uVerandaAtlas,7);
     gl.uniformMatrix4fv(M.uView,false,view);gl.uniformMatrix4fv(M.uProj,false,proj);
+    gl.uniformMatrix4fv(M.uModel,false,IDENT);
     gl.uniform3fv(M.uEye,eye);gl.uniform1f(M.uFogNear,fogNear);gl.uniform1f(M.uFogFar,fogFar);
     var meshTriangles=0,meshBytes=0;
     meshes.resident.forEach(function(item){
@@ -2029,7 +2043,7 @@
     game.bottles.forEach(function (b) {
       drawCloud(bottleGPU, yawMat(time * 1.5 + b.phase, b.x, 0.08 + 0.06 * Math.sin(time * 3 + b.phase), b.z), 10);
     });
-    if (!calibrationMode) {
+    if (!calibrationMode && !stroller.solid) {
       drawCloud(stroller.gpu, model, 6);
       stroller.wheels.forEach(function (wheel) {
         [-1, 1].forEach(function (side) {
@@ -2043,6 +2057,16 @@
     }
     flushClouds();
     gl.disable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+    if (!calibrationMode && stroller.solid) {
+      gl.useProgram(M.prog);
+      function drawPram(part,transform){gl.uniformMatrix4fv(M.uModel,false,transform);gl.bindVertexArray(part.vao);gl.drawArrays(gl.TRIANGLES,0,part.n);calls++;}
+      drawPram(stroller.body,model);
+      stroller.wheels.forEach(function(wheel){[-1,1].forEach(function(side){
+        if(wheel.front)drawPram(stroller.frontFork,mat4mul(model,ParkStroller.wheelPose(wheel,side,car.steer,car.wheelTravel,false)));
+        drawPram(wheel.gpu,mat4mul(model,ParkStroller.wheelPose(wheel,side,car.steer,car.wheelTravel)));
+      });});
+      window.__stats.mesh.triangles+=stroller.triangles;
+    }
     window.__stats.drawnPoints=submitted; window.__stats.drawCalls=calls;
     window.__stats.renderCpuMs=+(performance.now()-renderStart).toFixed(2);
     gl.bindVertexArray(null);
@@ -2369,7 +2393,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261023-alley2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261023-stroller1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2548,18 +2572,26 @@
     }));
     window.__stats.scans = capturedScans.map(function (s) { return { id: s.id, at: s.at, points: s.gpu.n }; });
 
-    statusEl.textContent = 'Загрузка коляски…';
-    var customSource=new URLSearchParams(location.search).get('src'), s;
-    if(customSource) {
+    statusEl.textContent = 'Подготовка коляски…';
+    var strollerQuery=new URLSearchParams(location.search),customSource=strollerQuery.get('src'),s;
+    if(customSource || strollerQuery.get('stroller')==='scan') {
+      if(customSource){
       var spz=await fetch(customSource);
       if(!spz.ok) throw new Error('Stroller '+spz.status);
       s=extractStroller(SPZ.parse(await SPZ.gunzip(await spz.arrayBuffer())));
-    } else s=await loadPackedCloud(res[4].stroller);
-    stroller = prepareStroller(s, !customSource);
-    window.__stats.stroller = { scanPoints: s.size.length, bodyPoints: stroller.gpu.n,
+      }else s=await loadPackedCloud(res[4].stroller);
+      stroller = prepareStroller(s, !customSource);
+      window.__stats.stroller = { representation:'scan',scanPoints: s.size.length, bodyPoints: stroller.gpu.n,
       wheelPoints: stroller.wheels.reduce(function (n, wheel) { return n + wheel.gpu.n * 2; }, 0),
       facePointsRemoved: stroller.removedFace,
       length: +s.length.toFixed(2), width: +s.width.toFixed(2) };
+    }else{
+      var pram=ParkStroller.build(ParkMeshes.Geometry),spec=ParkStroller.spec;
+      stroller={solid:true,body:uploadMeshData(pram.body),frontFork:uploadMeshData(pram.frontFork),wheels:spec.wheels.map(function(w,i){return Object.assign({},w,{gpu:uploadMeshData(i?pram.rearWheel:pram.frontWheel)});}),length:spec.length,width:spec.width};
+      stroller.triangles=(pram.body.n+pram.frontFork.n*2+pram.frontWheel.n*2+pram.rearWheel.n*2)/3;
+      window.__stats.stroller={representation:'mesh',scanPoints:0,bodyPoints:0,wheelPoints:0,triangles:stroller.triangles,bodyTriangles:pram.body.n/3,bytes:Object.values(pram).reduce(function(n,p){return n+p.data.byteLength;},0),length:spec.length,width:spec.width};
+    }
+    window.__stroller=stroller;
 
     buildPigeons();
     buildDogs();
@@ -2576,7 +2608,10 @@
     if (benchmark || streamTest) startGame('free');
     if(new URLSearchParams(location.search).get('tour')==='details') visitDetails();
     var preview=new URLSearchParams(location.search).get('preview');
-    if(preview==='central-west'){
+    if(preview==='stroller'){
+      startGame('free');car.x=10;car.z=-390;car.heading=0;car.v=0;
+      cam.yaw=car.heading;cam.orbit=-.65;cam.pitch=.18;cam.dist=canvas.width<canvas.height?3:2.1;cam.top=false;
+    }else if(preview==='central-west'){
       startGame('free');car.x=26;car.z=-334;car.heading=4.25;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.13;cam.dist=canvas.width<canvas.height?4.5:5;cam.top=false;
     }else if(preview==='central-alley'){

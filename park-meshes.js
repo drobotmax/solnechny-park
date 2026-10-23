@@ -538,6 +538,6 @@ function build(e){
  for(let i=0;i<data.length;i+=10)radius=Math.max(radius,Math.hypot(data[i]-e.cx,data[i+1]-5,data[i+2]-e.cz));
  return {data,n:data.length/10,center:[e.cx,5,e.cz],radius};
 }
-const api={entries,forestEntries,bridgeEntries,bridgeFrame,bridgeSpec,bridgeWalkRise,applyBridgeGround,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec,verandaClearsTree:Veranda.clearsTree,centralClearsTree:CentralAlley.clearsTree,centralTrees:CentralAlley.trees};
+const api={Geometry,entries,forestEntries,bridgeEntries,bridgeFrame,bridgeSpec,bridgeWalkRise,applyBridgeGround,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec,verandaClearsTree:Veranda.clearsTree,centralClearsTree:CentralAlley.clearsTree,centralTrees:CentralAlley.trees};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkMeshes=api;
 })(typeof window!=='undefined'?window:globalThis);
