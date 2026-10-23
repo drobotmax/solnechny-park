@@ -809,7 +809,7 @@
     park.buildings.forEach(function (b, index) {
       if(ParkMeshes.buildingIds.indexOf(index)!==-1){
         // Preserve the removed point models' palette draws for neighbouring colours.
-        if([4,47,48,67,77,113,122,123].indexOf(index)>=0){r();r();}
+        if([4,47,48,67,68,77,113,122,123].indexOf(index)>=0){r();r();}
         return;
       }
       var p = b.pts, h = b.h, wall = WALLS[Math.floor(r() * WALLS.length)], roof = ROOFS[Math.floor(r() * ROOFS.length)];
@@ -842,7 +842,7 @@
 
     park.rides.forEach(function (ride,index) {
       // Retain the old colour draw when replacing the mapped mushroom ride.
-      if(index===3||index===8||index===23||index===28||index===29){r();return;}
+      if(index===3||index===8||index===23||index===28||index===29||index===45||index===46){r();return;}
       if (ride.name !== 'Круговой обзор' && ParkMeshes.rideIds.indexOf(index)===-1) buildRide(cl, r, ride);
     });
     park.fences.forEach(function (f) {
@@ -2413,7 +2413,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261023-train1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261023-junction1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2461,6 +2461,7 @@
     ParkHouseSurroundings.applyGround(cats,park,meshEntries);
     ParkVeranda.applyGround(cats,park,meshEntries);
     ParkCentralAlley.applyGround(cats,park,meshEntries);
+    ParkAvenueJunction.applyGround(cats,park);
     ParkAvenueTrain.applyGround(cats,park);
     ParkMeshes.applyBridgeGround(cats,park);
     for(var z=-440;z<=-400;z+=park.mpp)for(var x=-22;x<=43;x+=park.mpp){
@@ -2636,6 +2637,9 @@
     if(preview==='stroller'){
       startGame('free');car.x=10;car.z=-390;car.heading=0;car.v=0;
       cam.yaw=car.heading;cam.orbit=-.65;cam.pitch=.18;cam.dist=canvas.width<canvas.height?3:2.1;cam.top=false;
+    }else if(preview==='avenue-junction'){
+      startGame('free');car.x=47.2;car.z=-247.5;car.heading=2.94;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.12;cam.dist=canvas.width<canvas.height?5:4.5;cam.top=false;
     }else if(preview==='avenue-train'){
       startGame('free');car.x=40.7;car.z=-280;car.heading=2.75;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.12;cam.dist=canvas.width<canvas.height?5:4.5;cam.top=false;

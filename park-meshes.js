@@ -7,8 +7,9 @@ const UpsideDownHouse=typeof module!=='undefined'&&module.exports?require('./par
 const HouseSurroundings=typeof module!=='undefined'&&module.exports?require('./park-house-surroundings.js'):root.ParkHouseSurroundings;
 const Veranda=typeof module!=='undefined'&&module.exports?require('./park-veranda.js'):root.ParkVeranda;
 const AvenueTrain=typeof module!=='undefined'&&module.exports?require('./park-avenue-train.js'):root.ParkAvenueTrain;
+const AvenueJunction=typeof module!=='undefined'&&module.exports?require('./park-avenue-junction.js'):root.ParkAvenueJunction;
 const CentralAlley=typeof module!=='undefined'&&module.exports?require('./park-central-alley.js'):root.ParkCentralAlley;
-const buildingIds=[3,4,5,6,7,47,48,49,50,67,77,81,113,122,123], rideIds=[0,1,2,3,6,8,9,17,23,25,26,27,28,29,36];
+const buildingIds=[3,4,5,6,7,47,48,49,50,67,68,77,81,113,122,123], rideIds=[0,1,2,3,6,8,9,17,23,25,26,27,28,29,36,45,46];
 // Placed and scaled to the stage rectangle marked in the user's plaza screenshot.
 const plazaStageFootprint=[[49.93,-379.74],[44.53,-369.06],[50.08,-366.26],[55.48,-376.94]];
 const bridgeLandingAxis=[[7.87,-432.91],[13.3,-406.85]];
@@ -55,18 +56,19 @@ function entries(park){
  const stageCenter=center(plazaStageFootprint);
  const b=park.buildings[123],c=center(b.pts),house={id:'b123',cx:c[0],cz:c[1],pts:b.pts,kind:'upsideDownHouse'};
  return buildingIds.map(i=>{const b=park.buildings[i],c=center(b.pts),kind=i===123?'upsideDownHouse':i===5?'policePost':i===6?'shoreMooring':i===122?'shoreTicket':i===4?'ticketOffice':i===7?'bikeCafe':i===49?'tutCoffee':i===81?'veranda':i===50?'verandaGazebo':'building';
-  const e={id:'b'+i,cx:c[0],cz:c[1],kind:i===67?'serviceKiosk':i===47?'alleyCafe':i===48?'arcade':i===77||i===113?'rideBooth':kind,pts:b.pts,h:i===123?6.8:i===81?7.46:i===3?7.2:b.h,style:i===3?'colonnade':'cafe'};
+  const e={id:'b'+i,cx:c[0],cz:c[1],kind:i===68?'terracePavilion':i===67?'serviceKiosk':i===47?'alleyCafe':i===48?'arcade':i===77||i===113?'rideBooth':kind,pts:b.pts,h:i===123?6.8:i===81?7.46:i===3?7.2:b.h,style:i===3?'colonnade':'cafe'};
   if(kind==='policePost'||kind==='shoreTicket')Object.assign(e,HouseSurroundings.layout(house,kind));
   if(kind==='shoreMooring')e.house=house;
   return e;})
  .concat(rideIds.map(i=>{const r=park.rides[i],c=center(r.pts);
   const kind=i===3?'transylvania':i===1?'coaster':i===36?'carousel':i===0||i===2?'bumper':i===17?'train':i===26?'swingTower':i===27?'pendulum':'spinner';
-  return {id:'r'+i,cx:i===8?CentralAlley.kiddie[0]:c[0],cz:i===8?CentralAlley.kiddie[1]:c[1],kind:i===8?'kiddieCarousel':i===23?'airTrack':i===28?'carCarousel':i===29?'toyCarousel':i===36?'weddingCarousel':kind,pts:r.pts};}))
+  return {id:'r'+i,cx:i===46?AvenueJunction.gallery.x:i===45?AvenueJunction.play.x:i===8?CentralAlley.kiddie[0]:c[0],cz:i===46?AvenueJunction.gallery.z:i===45?AvenueJunction.play.z:i===8?CentralAlley.kiddie[1]:c[1],kind:i===46?'shootingGallery':i===45?'playground':i===8?'kiddieCarousel':i===23?'airTrack':i===28?'carCarousel':i===29?'toyCarousel':i===36?'weddingCarousel':kind,pts:r.pts};}))
  .concat([{id:'plaza-stage',cx:stageCenter[0],cz:stageCenter[1],kind:'plazaStage',pts:plazaStageFootprint},
   {id:'entrance-landing',cx:10.6,cz:-419.9,kind:'bridgeLanding',pts:bridgeLandingAxis},
   {id:'central-alley',cx:24,cz:-337,kind:'centralAlley',pts:CentralAlley.bed},
   {id:'central-west',cx:12,cz:-329,kind:'centralWest',pts:CentralAlley.westBed},
-  {id:'main-avenue',cx:28,cz:-299,kind:'mainAvenue',pts:CentralAlley.continuationBed}]);
+  {id:'main-avenue',cx:28,cz:-299,kind:'mainAvenue',pts:CentralAlley.continuationBed},
+  {id:'avenue-junction',cx:40,cz:-240,kind:'avenueJunction',pts:[[-1,-248],[94,-253],[94,-219],[12,-219]]}]);
 }
 function forestEntries(trees){
  const sectors=new Map();
@@ -534,12 +536,12 @@ function pendulum(g,e){
  }
 }
 function build(e){
- const g=new Geometry();({building,bikeCafe,tutCoffee,bridgeLanding,plazaStage,bumper,carousel,coaster,spinner,train,swingTower,pendulum,forest,bridgeRails,ticketOffice:TicketOffice.build,transylvania:Transylvania.build,upsideDownHouse:UpsideDownHouse.build,policePost:HouseSurroundings.cabin,shoreTicket:HouseSurroundings.cabin,shoreMooring:HouseSurroundings.mooring,veranda:Veranda.main,verandaGazebo:Veranda.gazebo,carCarousel:CentralAlley.carCarousel,toyCarousel:CentralAlley.toyCarousel,weddingCarousel:CentralAlley.weddingCarousel,kiddieCarousel:CentralAlley.kiddieCarousel,airTrack:CentralAlley.airTrack,serviceKiosk:CentralAlley.serviceKiosk,centralWest:CentralAlley.westGarden,mainAvenue:CentralAlley.mainGarden,alleyCafe:CentralAlley.cafe,arcade:CentralAlley.arcade,rideBooth:CentralAlley.booth,centralAlley:CentralAlley.avenue}[e.kind])(g,e);
+ const g=new Geometry();({building,bikeCafe,tutCoffee,bridgeLanding,plazaStage,bumper,carousel,coaster,spinner,train,swingTower,pendulum,forest,bridgeRails,ticketOffice:TicketOffice.build,transylvania:Transylvania.build,upsideDownHouse:UpsideDownHouse.build,policePost:HouseSurroundings.cabin,shoreTicket:HouseSurroundings.cabin,shoreMooring:HouseSurroundings.mooring,veranda:Veranda.main,verandaGazebo:Veranda.gazebo,carCarousel:CentralAlley.carCarousel,toyCarousel:CentralAlley.toyCarousel,weddingCarousel:CentralAlley.weddingCarousel,kiddieCarousel:CentralAlley.kiddieCarousel,airTrack:CentralAlley.airTrack,serviceKiosk:CentralAlley.serviceKiosk,centralWest:CentralAlley.westGarden,mainAvenue:CentralAlley.mainGarden,terracePavilion:AvenueJunction.terrace,shootingGallery:AvenueJunction.shootingGallery,playground:AvenueJunction.playground,avenueJunction:AvenueJunction.junction,alleyCafe:CentralAlley.cafe,arcade:CentralAlley.arcade,rideBooth:CentralAlley.booth,centralAlley:CentralAlley.avenue}[e.kind])(g,e);
  if(e.kind==='upsideDownHouse')HouseSurroundings.stairs(g,e);
  const data=new Float32Array(g.data);let radius=0;
  for(let i=0;i<data.length;i+=10)radius=Math.max(radius,Math.hypot(data[i]-e.cx,data[i+1]-5,data[i+2]-e.cz));
  return {data,n:data.length/10,center:[e.cx,5,e.cz],radius};
 }
-const api={Geometry,entries,forestEntries,bridgeEntries,bridgeFrame,bridgeSpec,bridgeWalkRise,applyBridgeGround,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec,verandaClearsTree:Veranda.clearsTree,centralClearsTree:(x,z)=>CentralAlley.clearsTree(x,z)||AvenueTrain.clearsTree(x,z),centralTrees:CentralAlley.trees};
+const api={Geometry,entries,forestEntries,bridgeEntries,bridgeFrame,bridgeSpec,bridgeWalkRise,applyBridgeGround,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec,verandaClearsTree:Veranda.clearsTree,centralClearsTree:(x,z)=>CentralAlley.clearsTree(x,z)||AvenueTrain.clearsTree(x,z)||AvenueJunction.clearsTree(x,z),centralTrees:CentralAlley.trees.concat(AvenueJunction.trees)};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkMeshes=api;
 })(typeof window!=='undefined'?window:globalThis);
