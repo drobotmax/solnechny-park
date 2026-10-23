@@ -11,7 +11,8 @@ test('Transylvania replaces the mushroom ride east of the ticket office, facing 
  assert(f.radius>5&&f.radius<6);
  assert(f.front[0]<-.9,'entry faces west toward the ticket-office forecourt');
  assert(f.right[0]*f.front[1]-f.right[1]*f.front[0]>.99,'front artwork must read left to right from outside');
- assert(!all.some(e=>e.id==='r7'||e.id==='r8'),'unidentified neighbouring platforms retain their current models');
+ assert(!all.some(e=>e.id==='r7'),'the still unidentified neighbouring platform retains its model');
+ assert.equal(all.find(e=>e.id==='r8').kind,'kiddieCarousel','the new panorama identifies the small open carousel');
 });
 
 test('ride has four decorated tapered faces, tall swan ornaments and low wheeled carriages',()=>{

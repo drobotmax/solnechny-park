@@ -796,7 +796,7 @@
     park.buildings.forEach(function (b, index) {
       if(ParkMeshes.buildingIds.indexOf(index)!==-1){
         // Preserve the removed point models' palette draws for neighbouring colours.
-        if([4,47,48,77,113,122,123].indexOf(index)>=0){r();r();}
+        if([4,47,48,67,77,113,122,123].indexOf(index)>=0){r();r();}
         return;
       }
       var p = b.pts, h = b.h, wall = WALLS[Math.floor(r() * WALLS.length)], roof = ROOFS[Math.floor(r() * ROOFS.length)];
@@ -829,7 +829,7 @@
 
     park.rides.forEach(function (ride,index) {
       // Retain the old colour draw when replacing the mapped mushroom ride.
-      if(index===3||index===28||index===29){r();return;}
+      if(index===3||index===8||index===23||index===28||index===29){r();return;}
       if (ride.name !== 'Круговой обзор' && ParkMeshes.rideIds.indexOf(index)===-1) buildRide(cl, r, ride);
     });
     park.fences.forEach(function (f) {
@@ -2369,12 +2369,12 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261023-alley1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261023-alley2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
     meshContacts=new Float32Array(meshEntries.filter(function(e){
-      return ['building','bikeCafe','tutCoffee','ticketOffice','upsideDownHouse','policePost','shoreTicket','veranda','verandaGazebo','transylvania','bumper','carousel','coaster','carCarousel','toyCarousel','weddingCarousel','alleyCafe','arcade','rideBooth'].indexOf(e.kind)>=0;
+      return ['building','bikeCafe','tutCoffee','ticketOffice','upsideDownHouse','policePost','shoreTicket','veranda','verandaGazebo','transylvania','bumper','carousel','coaster','carCarousel','toyCarousel','weddingCarousel','kiddieCarousel','serviceKiosk','alleyCafe','arcade','rideBooth'].indexOf(e.kind)>=0;
     }).flatMap(function(e){
       var p=e.kind==='upsideDownHouse'?ParkUpsideDownHouse.footprint(e):e.kind==='policePost'||e.kind==='shoreTicket'?ParkHouseSurroundings.footprint(e):e.kind==='verandaGazebo'?ParkVeranda.footprint(e):ParkCentralAlley.footprint(e);
       var b=bbox(p);return [e.cx,e.cz,Math.max(1,(b[2]-b[0])/2),Math.max(1,(b[3]-b[1])/2)];
@@ -2576,7 +2576,10 @@
     if (benchmark || streamTest) startGame('free');
     if(new URLSearchParams(location.search).get('tour')==='details') visitDetails();
     var preview=new URLSearchParams(location.search).get('preview');
-    if(preview==='central-alley'){
+    if(preview==='central-west'){
+      startGame('free');car.x=26;car.z=-334;car.heading=4.25;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.13;cam.dist=canvas.width<canvas.height?4.5:5;cam.top=false;
+    }else if(preview==='central-alley'){
       startGame('free');car.x=26;car.z=-334;car.heading=-.20;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.13;cam.dist=canvas.width<canvas.height?10:5;cam.top=false;
     }else if(preview==='bridge'){
