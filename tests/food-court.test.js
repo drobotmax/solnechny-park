@@ -12,7 +12,7 @@ test('the forecourt replaces the provisional street-side coffee stall with an op
  for(const t of S.trees)assert(!J.inside(S.forecourt,...t),'the added trunks must clear the new forecourt');
 });
 test('the court fence stays solid and the avenue verge has grass instead of invented paving',()=>{
- const c=raster();for(let i=1;i<S.courtFence.length;i++){const a=S.courtFence[i-1],b=S.courtFence[i];for(let k=0;k<=20;k++){const x=a[0]+(b[0]-a[0])*k/20,z=a[1]+(b[1]-a[1])*k/20;assert(S.replacesFence(x,z));assert(S.solid(x,z));}}
+ const c=raster();for(let i=1;i<S.courtFence.length;i++){const a=S.courtFence[i-1],b=S.courtFence[i];for(let k=0;k<=20;k++){const x=a[0]+(b[0]-a[0])*k/20,z=a[1]+(b[1]-a[1])*k/20;assert(S.replacesFence(x,z));assert.equal(S.solid(x,z),!S.onCourtGate(x,z),'only the photographed tennis gate interrupts the fence');}}
  for(const [x,z] of [[55,-186],[56.4,-180],[58.5,-170],[60.5,-160],[51,-178],[45,-172.8],[44,-164],[45.8,-152]])assert.equal(c[index(x,z)]&31,1,`the verge must be grass at ${x},${z}`);
  assert.equal(c[index(54,-188.5)]&31,3,'the bench has a small asphalt recess');
  assert(!S.replacesFence(44,-164),'the lawn must not become a mesh fence');

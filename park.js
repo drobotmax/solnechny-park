@@ -809,7 +809,7 @@
     park.buildings.forEach(function (b, index) {
       if(ParkMeshes.buildingIds.indexOf(index)!==-1){
         // Preserve the removed point models' palette draws for neighbouring colours.
-        if([4,47,48,67,68,77,113,115,122,123,128].indexOf(index)>=0){r();r();}
+        if([4,47,48,67,68,77,113,115,122,123,126,128].indexOf(index)>=0){r();r();}
         return;
       }
       var p = b.pts, h = b.h, wall = WALLS[Math.floor(r() * WALLS.length)], roof = ROOFS[Math.floor(r() * ROOFS.length)];
@@ -966,26 +966,6 @@
         }
       }
     });
-    // Red inverted-U bicycle stands mark the cafe side of the asphalt forecourt.
-    function rackLine(x1, y1, z1, x2, y2, z2) {
-      var steps = Math.max(1, Math.ceil(Math.hypot(x2-x1, y2-y1, z2-z1) / .07));
-      for (var i = 0; i <= steps; i++) {
-        var t = i / steps;
-        cl.add(x1+(x2-x1)*t, y1+(y2-y1)*t, z1+(z2-z1)*t, [116, 43, 51], .05, false);
-      }
-    }
-    var rackDx = -5.1, rackDz = 1.05, rackLength = Math.hypot(rackDx, rackDz);
-    var sideX = rackDz / rackLength, sideZ = -rackDx / rackLength;
-    for (var rack = 0; rack < 11; rack++) {
-      var cx = 43.6 + rackDx * rack, cz = -396.2 + rackDz * rack;
-      var lx = cx - sideX * .67, lz = cz - sideZ * .67;
-      var rx = cx + sideX * .67, rz = cz + sideZ * .67;
-      rackLine(lx, .05, lz, lx, .66, lz);
-      rackLine(lx, .66, lz, lx + sideX * .13, .85, lz + sideZ * .13);
-      rackLine(lx + sideX * .13, .85, lz + sideZ * .13, rx - sideX * .13, .85, rz - sideZ * .13);
-      rackLine(rx - sideX * .13, .85, rz - sideZ * .13, rx, .66, rz);
-      rackLine(rx, .66, rz, rx, .05, rz);
-    }
   }
 
   function bbox(p) {
@@ -2414,7 +2394,7 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261023-verge1').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261027-picnic2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
@@ -2441,6 +2421,8 @@
     var upsideDownEntry=meshEntries.find(function(e){return e.kind==='upsideDownHouse';});
     park.labels.unshift(['Дом вверх дном',[upsideDownEntry.cx,upsideDownEntry.cz],18]);
     ['policePost','shoreTicket'].forEach(function(kind){var e=meshEntries.find(function(e){return e.kind===kind;});park.labels.unshift([kind==='policePost'?'Полиция':'Касса',[e.cx,e.cz],16]);});
+    var yeseninEntry=meshEntries.find(function(e){return e.kind==='yesenin';});
+    if(yeseninEntry)park.labels.unshift(['Сергей Есенин',[yeseninEntry.cx,yeseninEntry.cz],20]);
     var oakSites = park.landmarks.filter(function (lm) { return lm.kind === 'oak'; });
     park.trees = park.trees.filter(function (tree) {
       return !park.scans.some(function (scan) { return Math.hypot(tree[0] - scan.at[0], tree[1] - scan.at[1]) < 9; }) &&
@@ -2464,6 +2446,7 @@
     ParkCentralAlley.applyGround(cats,park,meshEntries);
     ParkAvenueJunction.applyGround(cats,park);
     ParkSafariAvenue.applyGround(cats,park);
+    ParkAvenuePicnic.applyGround(cats,park);
     ParkAvenueTrain.applyGround(cats,park);
     ParkMeshes.applyBridgeGround(cats,park);
     for(var z=-440;z<=-400;z+=park.mpp)for(var x=-22;x<=43;x+=park.mpp){
@@ -2498,7 +2481,11 @@
       var ix=Math.floor((x-park.x0)/park.mpp), iz=Math.floor((z-park.z0)/park.mpp);
       if (ix>=0 && iz>=0 && ix<park.w && iz<park.h) cats[iz*park.w+ix]=BUILDING|IN_PARK;
     }
+    ParkScannedLandmarks.applySiteGround(cats,park);
     groundTex = texture(0, gl.R8, gl.RED, park.w, park.h, cats);
+    ParkAvenuePicnic.applyObstacles(cats,park);
+    // These narrow obstacles block movement without replacing the surface below them.
+    ParkScannedLandmarks.applyGround(cats,park);
     albedoTex = texture(1, gl.RGB8, gl.RGB, 0, 0, null, res[2]);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.generateMipmap(gl.TEXTURE_2D);
@@ -2636,7 +2623,16 @@
     if (benchmark || streamTest) startGame('free');
     if(new URLSearchParams(location.search).get('tour')==='details') visitDetails();
     var preview=new URLSearchParams(location.search).get('preview');
-    if(preview==='stroller'){
+    if(preview==='picnic-avenue'){
+      startGame('free');car.x=63.5;car.z=-173.2;car.heading=1.60;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?5.5:3.5;cam.top=false;
+    }else if(preview==='yesenin'&&yeseninEntry){
+      startGame('free');car.x=yeseninEntry.cx-Math.sin(yeseninEntry.yaw)*4.5;car.z=yeseninEntry.cz+Math.cos(yeseninEntry.yaw)*4.5;car.heading=yeseninEntry.yaw;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?6:4;cam.top=false;
+    }else if(preview==='plaza-barriers'){
+      startGame('free');car.x=32.2;car.z=-397.4;car.heading=Math.PI;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.15;cam.dist=canvas.width<canvas.height?4:3;cam.top=false;
+    }else if(preview==='stroller'){
       startGame('free');car.x=10;car.z=-390;car.heading=0;car.v=0;
       cam.yaw=car.heading;cam.orbit=-.65;cam.pitch=.18;cam.dist=canvas.width<canvas.height?3:2.1;cam.top=false;
     }else if(preview==='food-court'){
