@@ -13,7 +13,7 @@ test('both side walks and terrace gaps are open on the real raster while fixture
  const cats=corrected(),blocked=(x,z)=>[4,5,12,13].includes(cats[index(x,z)]&31);
  for(const path of [J.westPath,J.eastPath])for(let i=1;i<path.length;i++)for(let k=0;k<=20;k++){const f=k/20,a=path[i-1],b=path[i],x=a[0]+(b[0]-a[0])*f,z=a[1]+(b[1]-a[1])*f;assert(!blocked(x,z),`side walk blocked at ${x},${z}`);}
  for(const p of [[56,-258],[57.5,-254.5],[62.6,-251],[47.2,-247.5],[53,-218]])assert(!blocked(...p),`entry blocked at ${p}`);
- for(const p of [[J.gallery.x,J.gallery.z],[26,-224],[84.7,-267.1],[32,-233.2],[40,-246.8],[53,-269],[56.6,-224.5],[58.6,-219.5]])assert(blocked(...p),`fixture missing at ${p}`);
+ for(const p of [[J.gallery.x,J.gallery.z],[26,-224],[84.7,-251.1],[32,-233.2],[40,-246.8],J.planters[0].slice(0,2),[56.6,-224.5],[58.6,-219.5]])assert(blocked(...p),`fixture missing at ${p}`);
  assert(!blocked(56.5,-231.5),'the blue play railing has an avenue-facing gate');
  const prior=require('../park-avenue-gardens');for(const v of [-1,0,3,7.7])assert(!blocked(...prior.world(-3,v)),'the accepted Tropikanka entrance stays open');
  for(const [u,v] of [[-13.8,8],[-13.8,10],[-10,10]])assert(blocked(...prior.world(u,v)),'the new paving cannot erase the accepted annex walls');

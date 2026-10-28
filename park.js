@@ -809,7 +809,7 @@
     park.buildings.forEach(function (b, index) {
       if(ParkMeshes.buildingIds.indexOf(index)!==-1){
         // Preserve the removed point models' palette draws for neighbouring colours.
-        if([4,47,48,67,68,77,113,115,122,123,126,128].indexOf(index)>=0){r();r();}
+        if([4,47,48,67,68,76,77,94,113,115,122,123,125,126,128].indexOf(index)>=0){r();r();}
         return;
       }
       var p = b.pts, h = b.h, wall = WALLS[Math.floor(r() * WALLS.length)], roof = ROOFS[Math.floor(r() * ROOFS.length)];
@@ -2394,12 +2394,12 @@
       loadImage('park/ground.png?v=20261020-approach2'),
       loadImage('park/albedo.jpg'),
       fetch('park/scans.json').then(function (r) { if (!r.ok) throw new Error('scans.json ' + r.status); return r.json(); }),
-      fetch('park/stream-manifest.json?v=20261027-picnic2').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
+      fetch('park/stream-manifest.json?v=20261028-khutorok-toilet4').then(function(r) {if(!r.ok) throw new Error('stream manifest '+r.status);return r.json();}),
     ]);
     park = res[0];
     var meshEntries=ParkMeshes.entries(park);
     meshContacts=new Float32Array(meshEntries.filter(function(e){
-      return ['building','bikeCafe','tutCoffee','ticketOffice','upsideDownHouse','policePost','shoreTicket','veranda','verandaGazebo','transylvania','bumper','carousel','coaster','carCarousel','toyCarousel','weddingCarousel','kiddieCarousel','serviceKiosk','alleyCafe','arcade','rideBooth'].indexOf(e.kind)>=0;
+      return ['khutorokAnnex','khutorokTealHut','khutorokVineShed','gardenKiosk','gardenPavilion','khutorok','building','bikeCafe','tutCoffee','ticketOffice','upsideDownHouse','policePost','shoreTicket','veranda','verandaGazebo','transylvania','bumper','carousel','coaster','carCarousel','toyCarousel','weddingCarousel','kiddieCarousel','serviceKiosk','alleyCafe','arcade','rideBooth'].indexOf(e.kind)>=0;
     }).flatMap(function(e){
       var p=e.kind==='upsideDownHouse'?ParkUpsideDownHouse.footprint(e):e.kind==='policePost'||e.kind==='shoreTicket'?ParkHouseSurroundings.footprint(e):e.kind==='verandaGazebo'?ParkVeranda.footprint(e):ParkCentralAlley.footprint(e);
       var b=bbox(p);return [e.cx,e.cz,Math.max(1,(b[2]-b[0])/2),Math.max(1,(b[3]-b[1])/2)];
@@ -2421,6 +2421,8 @@
     var upsideDownEntry=meshEntries.find(function(e){return e.kind==='upsideDownHouse';});
     park.labels.unshift(['Дом вверх дном',[upsideDownEntry.cx,upsideDownEntry.cz],18]);
     ['policePost','shoreTicket'].forEach(function(kind){var e=meshEntries.find(function(e){return e.kind===kind;});park.labels.unshift([kind==='policePost'?'Полиция':'Касса',[e.cx,e.cz],16]);});
+    var khutorokEntry=meshEntries.find(function(e){return e.kind==='khutorok';});
+    if(khutorokEntry)park.labels.unshift(['Хуторок',[khutorokEntry.cx,khutorokEntry.cz],22]);
     var yeseninEntry=meshEntries.find(function(e){return e.kind==='yesenin';});
     if(yeseninEntry)park.labels.unshift(['Сергей Есенин',[yeseninEntry.cx,yeseninEntry.cz],20]);
     var oakSites = park.landmarks.filter(function (lm) { return lm.kind === 'oak'; });
@@ -2447,6 +2449,10 @@
     ParkAvenueJunction.applyGround(cats,park);
     ParkSafariAvenue.applyGround(cats,park);
     ParkAvenuePicnic.applyGround(cats,park);
+    ParkKhutorok.applyGround(cats,park);
+    ParkYeseninGarden.applyGround(cats,park);
+    ParkGardenJunction.applyGround(cats,park);
+    ParkKhutorokLane.applyGround(cats,park);
     ParkAvenueTrain.applyGround(cats,park);
     ParkMeshes.applyBridgeGround(cats,park);
     for(var z=-440;z<=-400;z+=park.mpp)for(var x=-22;x<=43;x+=park.mpp){
@@ -2484,6 +2490,10 @@
     ParkScannedLandmarks.applySiteGround(cats,park);
     groundTex = texture(0, gl.R8, gl.RED, park.w, park.h, cats);
     ParkAvenuePicnic.applyObstacles(cats,park);
+    ParkKhutorok.applyObstacles(cats,park);
+    ParkYeseninGarden.applyObstacles(cats,park);
+    ParkGardenJunction.applyObstacles(cats,park);
+    ParkKhutorokLane.applyObstacles(cats,park);
     // These narrow obstacles block movement without replacing the surface below them.
     ParkScannedLandmarks.applyGround(cats,park);
     albedoTex = texture(1, gl.RGB8, gl.RGB, 0, 0, null, res[2]);
@@ -2623,7 +2633,36 @@
     if (benchmark || streamTest) startGame('free');
     if(new URLSearchParams(location.search).get('tour')==='details') visitDetails();
     var preview=new URLSearchParams(location.search).get('preview');
-    if(preview==='picnic-avenue'){
+    if(preview==='khutorok-toilet'){
+      startGame('free');car.x=ParkKhutorokToilet.station[0];car.z=ParkKhutorokToilet.station[1];car.v=0;
+      var toiletView=new URLSearchParams(location.search).get('view');car.heading=Object.hasOwn(ParkKhutorokToilet.views,toiletView)?ParkKhutorokToilet.views[toiletView]:ParkKhutorokToilet.views.east;
+      if(toiletView==='entrance'){car.x=ParkKhutorokToilet.entranceStation[0];car.z=ParkKhutorokToilet.entranceStation[1];car.heading=ParkKhutorokToilet.entranceHeading;}
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?5.5:3.8;cam.top=false;
+      if(toiletView==='west'||toiletView==='southwest'){
+        // Keep the rear-facing preview camera in front of the toilet wall.
+        car.x+=Math.sin(car.heading)*cam.dist*Math.cos(cam.pitch);car.z-=Math.cos(car.heading)*cam.dist*Math.cos(cam.pitch);
+      }
+    }else if(preview==='khutorok-lane'){
+      startGame('free');car.x=ParkKhutorokLane.station[0];car.z=ParkKhutorokLane.station[1];car.v=0;
+      var laneView=new URLSearchParams(location.search).get('view');car.heading=Object.hasOwn(ParkKhutorokLane.views,laneView)?ParkKhutorokLane.views[laneView]:ParkKhutorokLane.views.north;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?5.5:3.8;cam.top=false;
+    }else if(preview==='garden-junction'){
+      startGame('free');car.x=ParkGardenJunction.station[0];car.z=ParkGardenJunction.station[1];car.v=0;
+      var gardenView=new URLSearchParams(location.search).get('view');car.heading=Object.hasOwn(ParkGardenJunction.views,gardenView)?ParkGardenJunction.views[gardenView]:Math.PI;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?5.5:3.8;cam.top=false;
+    }else if(preview==='yesenin-garden'){
+      startGame('free');car.x=115.7;car.z=-222.4;car.heading=.37;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?5.5:3.8;cam.top=false;
+    }else if(preview==='khutorok-crossroads'){
+      startGame('free');car.x=126.5;car.z=-255.2;car.heading=-2.80;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?5.5:3.8;cam.top=false;
+    }else if(preview==='khutorok'){
+      startGame('free');var portrait=canvas.width<canvas.height;car.x=portrait?125.7:112.2;car.z=portrait?-250.4:-246.52;car.heading=portrait?1.99:1.30;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?5.5:3.7;cam.top=false;
+    }else if(preview==='yesenin-alley'){
+      startGame('free');car.x=94;car.z=-244.4;car.heading=-.95;car.v=0;
+      cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?5.5:3.5;cam.top=false;
+    }else if(preview==='picnic-avenue'){
       startGame('free');car.x=63.5;car.z=-173.2;car.heading=1.60;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.08;cam.dist=canvas.width<canvas.height?5.5:3.5;cam.top=false;
     }else if(preview==='yesenin'&&yeseninEntry){

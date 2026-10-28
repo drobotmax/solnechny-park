@@ -51,7 +51,7 @@ function kiosks(g){
 }
 function backdrop(g,e){const t=frame(g),p=e.pts;
  // The panorama exposes a low stone enclosure behind the stalls, under dense trees.
- for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length];t.q([a[0],.02,a[1]],[b[0],.02,b[1]],[b[0],1.95,b[1]],[a[0],1.95,a[1]],[.46,.45,.37],1);t.beam([a[0],1.98,a[1]],[b[0],1.98,b[1]],.055,[.57,.55,.46],1,4);}
+ for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length],h=i>=5?1.32:1.95;t.q([a[0],.02,a[1]],[b[0],.02,b[1]],[b[0],h,b[1]],[a[0],h,a[1]],[.46,.45,.37],1);t.beam([a[0],h+.03,a[1]],[b[0],h+.03,b[1]],.055,[.57,.55,.46],1,4);}
  const a=p[0],b=p[1],f=frame(g,...a,Math.atan2(b[1]-a[1],b[0]-a[0]));
  f.box(4.5,.03,.04,2.45,1.91,.07,[.20,.28,.21],12);
  for(const u of [3.28,4.50,5.72])f.box(u,.03,.085,.055,1.93,.045,[.34,.40,.31],2);

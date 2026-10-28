@@ -42,7 +42,7 @@ with sync_playwright() as p:
   assert d<.01 if blocked else d>.15,(name,d);return end
  for name,x,z,h in [('avenue',47.2,-247.5,2.94),('west_walk',42,-243,4.613),('east_walk',52,-244.6,1.368),('terrace_entry',62.6,-250,0),('play_gate',55.5,-231.5,math.pi/2)]:
   end=drive(name,x,z,h,ms=2600);assert math.dist([x,z],end)>1.8,(name,end)
- for name,x,z in [('gallery',54.3,-262.8),('stone_wall',32,-233.3),('shed',26,-224),('pavilion',84.7,-267.1),('hedge',40,-246.8),('planter',60.2,-251.6),('sphere_pod',58.94,-234.3),('popcorn',58.6,-219.5)]:drive(name,x,z,0,blocked=True)
+ for name,x,z in [('gallery',54.3,-262.8),('stone_wall',32,-233.3),('shed',26,-224),('pavilion',84.7,-251.1),('hedge',40,-246.8),('planter',60.2,-245.15),('sphere_pod',58.94,-234.3),('popcorn',58.6,-219.5)]:drive(name,x,z,0,blocked=True)
  annex=page.evaluate('ParkAvenueGardens.world(-13.8,8)');drive('prior_annex_wall',*annex,0,blocked=True)
  check(page);(out/'progress.json').write_text(json.dumps(report,indent=2)+'\n');page.close()
  phone=browser.new_page(viewport={'width':390,'height':844},device_scale_factor=3,is_mobile=True,has_touch=True);phone.set_default_timeout(120000);phone.on('pageerror',lambda e:errors.append(str(e)))

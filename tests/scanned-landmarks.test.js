@@ -57,7 +57,7 @@ test('Yesenin occupies the confirmed east-side pocket and faces the cross-path a
 });
 test('the tiled pocket joins the cross path while the pedestal and tablet remain solid',()=>{
  const cats=new Uint8Array(park.w*park.h).fill(72);S.applySiteGround(cats,park);
- for(const uv of [[0,0],[0,5],[0,10.5],[2.5,1]])assert.equal(cats[index(...S.world(...uv))],66,'the photographed paving and access remain walkable');
+ for(const uv of [[0,0],[0,5],[0,7.5],[2.5,1]])assert.equal(cats[index(...S.world(...uv))],66,'the photographed paving and access remain walkable');
  S.applyGround(cats,park);
  assert.equal(cats[index(...S.yesenin.at)]&31,13);
  assert.equal(cats[index(...S.world(...S.yesenin.plaque))]&31,13);

@@ -5,8 +5,9 @@ const Shape=typeof module!=='undefined'&&module.exports?require('./park-yesenin-
 const barriers={start:[43.6,-396.2],step:[-5.1,1.05],count:11,height:1.06,radius:.022,footRadius:.44};
 // The user's panorama/map places the relief south of the east cross path, facing NNW.
 const yesenin={at:[98,-234],yaw:2.75,height:3.2,pedestal:[.67,1.94,.52],plaque:[1.5,-.05],
- site:[[-3.2,-1.8],[3.2,-1.8],[3.2,5.2],[1.6,7.8],[-2.1,8.7],[-3.6,5.6]],
- approach:[[-1.7,7.2],[1.8,7.2],[1.2,11.7],[-1.7,11.7]]};
+ site:[[-3.2,-1.8],[3.2,-1.8],[3.2,5.2],[1.6,7.8],[-2.1,7.9],[-3.6,5.6]],
+ approach:[[-1.7,7.2],[1.8,7.2],[1.2,8.0],[-1.7,8.0]],
+ lawn:[[-3.05,3.55],[-1.02,3.55],[-1.02,5.75],[-3.05,5.75]],lamp:[-2.65,6.35]};
 function world(u,v){const c=Math.cos(yesenin.yaw),s=Math.sin(yesenin.yaw);return [yesenin.at[0]+c*u-s*v,yesenin.at[1]+s*u+c*v];}
 function local(x,z){const c=Math.cos(yesenin.yaw),s=Math.sin(yesenin.yaw),dx=x-yesenin.at[0],dz=z-yesenin.at[1];return [c*dx+s*dz,-s*dx+c*dz];}
 function inside(p,x,z){let hit=false;for(let i=0,j=p.length-1;i<p.length;j=i++)if((p[i][1]>z)!==(p[j][1]>z)&&x<(p[j][0]-p[i][0])*(z-p[i][1])/(p[j][1]-p[i][1])+p[i][0])hit=!hit;return hit;}
@@ -78,6 +79,14 @@ function site(g,e){
   const a=yesenin.site[i],b=yesenin.site[(i+1)%yesenin.site.length];
   t.beam([a[0],.055,a[1]],[b[0],.055,b[1]],.055,edge,1,4);
  }
+ for(let i=0;i<yesenin.lawn.length;i++){
+  const a=yesenin.lawn[i],b=yesenin.lawn[(i+1)%yesenin.lawn.length];
+  t.beam([a[0],.045,a[1]],[b[0],.045,b[1]],.035,edge,1,4);
+ }
+ const [lu,lv]=yesenin.lamp;
+ t.beam([lu,.03,lv],[lu,6.05,lv],.055,[.28,.33,.30],2,8);
+ t.beam([lu,5.96,lv],[lu+.60,6.20,lv],.038,[.28,.33,.30],2,6);
+ t.box(lu+.60,6.16,lv,.48,.10,.23,[.72,.73,.66],2);
  const [x,z]=yesenin.plaque,p=[[-.31,.13],[.31,.13],[.31,.54],[.19,.64],[-.15,.69],[-.31,.57]];
  t.box(x,0,z,.71,.10,.43,[.59,.59,.53]);
  for(let i=1;i<p.length-1;i++){
@@ -97,12 +106,12 @@ function applySiteGround(cats,park){
  const z0=Math.max(0,Math.floor((Math.min(...all.map(p=>p[1]))-park.z0)/park.mpp)),z1=Math.min(park.h-1,Math.ceil((Math.max(...all.map(p=>p[1]))-park.z0)/park.mpp));
  for(let iz=z0;iz<=z1;iz++)for(let ix=x0;ix<=x1;ix++){
   const x=park.x0+(ix+.5)*park.mpp,z=park.z0+(iz+.5)*park.mpp;
-  if(inSite(x,z)&&![4,5].includes(cats[iz*park.w+ix]&31))cats[iz*park.w+ix]=2|64;
+  if(inSite(x,z)&&![4,5].includes(cats[iz*park.w+ix]&31))cats[iz*park.w+ix]=(inside(yesenin.lawn,...local(x,z))?1:2)|64;
  }
 }
 function applyGround(cats,park){
  const objects=sites().map(p=>({at:p,r:.48}));
- objects.push({at:yesenin.at,r:.51},{at:world(...yesenin.plaque),r:.40});
+ objects.push({at:yesenin.at,r:.51},{at:world(...yesenin.plaque),r:.40},{at:world(...yesenin.lamp),r:.12});
  for(const {at:[x,z],r} of objects){
   const x0=Math.max(0,Math.floor((x-r-park.x0)/park.mpp)),x1=Math.min(park.w-1,Math.floor((x+r-park.x0)/park.mpp));
   const z0=Math.max(0,Math.floor((z-r-park.z0)/park.mpp)),z1=Math.min(park.h-1,Math.floor((z+r-park.z0)/park.mpp));

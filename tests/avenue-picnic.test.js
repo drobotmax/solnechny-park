@@ -12,7 +12,7 @@ test('the next panorama orders Coffee, the shutter, Picnic and ice cream down th
  assert(S.covered.every(p=>p[0]<60&&p[1]< -175),'the teal cover belongs on the north-west verge of this station');
  const models=M.entries(park).filter(e=>e.kind==='picnicKiosks'||e.kind==='picnicAvenue');assert.equal(models.length,2);
  assert(models.reduce((n,e)=>n+M.build(e).data.byteLength,0)<900000,'the new station uses bounded solid geometry');
- assert.deepEqual(M.centralTrees.slice(-P.trees.length),P.trees);
+ const earlier=A.trees.length+J.trees.length+S.trees.length+J.extraTrees.length;assert.deepEqual(M.centralTrees.slice(earlier,earlier+P.trees.length),P.trees);
 });
 test('the real asphalt remains continuous through the complete new station',()=>{
  const c=corrected();walk(P.axis,(x,z)=>{for(const [dx,dz] of [[0,0],[.3,0],[-.3,0],[0,.3],[0,-.3],[3.8,0],[-3.8,0]]){
