@@ -16,9 +16,10 @@ test('the new camera pin follows the mapped cafe service road and the five panor
  assert.deepEqual(S.axis[0],K.cafeDrive.at(-1));assert.deepEqual(S.station,S.axis[1]);assert(S.station[0]>N.station[0]+28);assert(Math.abs(S.station[1]-N.station[1])<2.0);
  const roadX=131.63+(S.station[1]+238.3)*(142.68-131.63)/98.06;assert(Math.abs(roadX-S.station[0])<.2);
  assert(S.hut.at[0]>S.station[0]+12);assert(S.hut.at[1]>S.eastWalk.at(-1)[1],'the hut is right of the footpath when looking east');
- assert(S.bins.every(p=>p[0]>S.axis[2][0]&&p[1]>S.station[1]),'bins are left of the south-facing road');
+ assert.equal(S.bins.length,10,'six lidded bins and four open skips follow the panorama');assert(S.bins.every(p=>p[0]>S.axis[2][0])&&S.bins.filter(p=>p[1]<S.station[1]).length>=5,'bins run north beside the right verge');
+ assert.equal(S.containerWall.length,3);assert(S.containerWall.every(p=>p[0]>S.axis[2][0])&&S.containerWall[0][1]<S.station[1],'the green brick wall encloses the east and south edges');
  assert(S.shed.every(p=>p[0]<S.axis[2][0]&&p[1]>S.station[1]),'the vine-covered building is right of the south-facing road');
- assert(S.views.north<0&&S.views.northwest<S.views.north&&S.views.east>1&&S.views.east<Math.PI/2&&S.views.south>2.9);
+ assert(S.views.north>0&&S.views.northwest<0&&S.views.east>.6&&S.views.east<1.2&&S.views.south>2.9);
 });
 test('the street, east footpath, porch gap and connection to the garden all fit the stroller',()=>{
  const c=corrected();for(const path of [S.axis,S.eastWalk,G.paths[3],S.porchApproach,S.yardApproach])envelope(c,path);
@@ -26,7 +27,7 @@ test('the street, east footpath, porch gap and connection to the garden all fit 
  assert.equal(c[index(126,-213)]&31,1,'the photographed west-side field is open lawn');
 });
 test('annexes, bins and roadside fixtures block while the nearby paths stay open',()=>{
- const c=corrected();for(const p of [S.hut.at,[146,-220],[126,-189],...S.bins,S.box,S.pole,...S.conifers,...S.cafeHedge,...S.southHedge])assert(blocked(c,p[0],p[1]),`missing physical fixture at ${p}`);
+ const c=corrected();for(const p of [S.hut.at,[146,-220],[126,-189],...S.bins,...S.containerWall,S.box,S.pole,...S.conifers,...S.cafeHedge,...S.southHedge])assert(blocked(c,p[0],p[1]),`missing physical fixture at ${p}`);
  assert(!blocked(c,...S.station));assert(!S.solid(...S.station));
  for(const t of K.trees.concat(S.trees)){assert(!J.inside(S.annex,t[0],t[1]),'no tree may pierce the new cafe windows');assert(!J.inside(S.shed,t[0],t[1]));assert(!require('../park-khutorok-toilet').inHut(t[0],t[1],.2));}
  const models=M.entries(park).filter(e=>['khutorokAnnex','khutorokTealHut','khutorokVineShed','khutorokServiceLane'].includes(e.kind));assert.equal(models.length,4);assert(models.reduce((n,e)=>n+M.build(e).data.byteLength,0)<.8*1024*1024,'the toilet and its rear-yard details stay in the local geometry budget');

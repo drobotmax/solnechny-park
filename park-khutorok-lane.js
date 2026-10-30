@@ -6,20 +6,21 @@ const K=typeof module!=='undefined'&&module.exports?require('./park-khutorok.js'
 const N=typeof module!=='undefined'&&module.exports?require('./park-garden-junction.js'):root.ParkGardenJunction;
 const T=typeof module!=='undefined'&&module.exports?require('./park-khutorok-toilet.js'):root.ParkKhutorokToilet;
 const C={wood:[.44,.28,.18],white:[.83,.84,.77],glass:[.21,.30,.29],roof:[.28,.29,.25],leaf:[.22,.37,.19],teal:[.28,.57,.53],dark:[.12,.16,.15],concrete:[.54,.57,.52]};
-const station=[134.7,-211.0],views={north:-.25,east:1.25,south:3.02,west:-1.55,northwest:-.65};
+const station=[134.7,-211.0],views={north:.35,east:.85,south:3.02,west:-1.55,northwest:-.65};
 const axis=[K.cafeDrive.at(-1),station,[136.25,-197.5],[137.7,-184.0]],halfRoad=1.75;
-const eastWalk=[station,[142.5,-211.9],[147.4,-212.5],T.station];
-const porchApproach=[[145.1,-212.2],[145.1,-218.4]],yardApproach=[[136.25,-197.5],[139.5,-197.5]];
+const eastWalk=[station,[135.95,-198.0],[145.5,-198.0],[148.2,-203.0],[147.4,-212.5],T.station];
+const porchApproach=[[145.1,-212.2],[145.1,-218.4]],yardApproach=[[135.62,-203.0],[139.5,-203.0]];
 const annex=[[140.9,-230.0],[142.3,-219.0],[152.8,-220.2],[151.3,-231.2]];
 const porch=[[142.3,-218.9],[147.3,-219.4],[147.5,-218.1],[142.5,-217.6]];
 const hut=T.hut;
 const shed=[[122.2,-193.0],[129,-193.0],[129.6,-184.2],[122.9,-184.0]];
-const yard=[[139.3,-198.0],[143.7,-198.0],[143.7,-187.5],[139.0,-187.5]];
+const yard=[[138.9,-218.9],[144.0,-218.9],[144.0,-201.3],[138.9,-201.3]];
 const lawn=[[120,-226],[131.2,-226],[134.3,-191.5],[129,-191.5],[120,-202]];
 const southHedgeRuns=[[N.hedge.at(-1),[133.4,-201.5]],[[134.1,-194.7],[134.5,-191.0]]],southHedge=southHedgeRuns.flat();
 const cafeHedge=[[139.7,-227],[140.0,-222.5],[140.5,-218.0]];
 const conifers=[[140.5,-223.9],[141.1,-219.6]];
-const bins=[[141.3,-196.2],[141.1,-193.8],[140.8,-191.5],[140.5,-189.2]],box=[140.9,-201.7],pole=[139.23,-199.44];
+const bins=Array.from({length:10},(_,i)=>[141.85,-218.2+i*1.65]);
+const containerWall=[[143.0,-218.9],[143.0,-201.3],[138.9,-201.3]],box=[140.9,-219.7],pole=[139.23,-199.44];
 const trees=[[126.1,-209.8,5.1,1.8],[121.0,-214.8,4.5,1.5],[128.0,-200.2,4.8,1.6],[130.2,-219.2,18,5.5],[157.8,-216.4,15,4.8]].concat(T.trees);
 function entries(){return [{id:'khutorok-annex',kind:'khutorokAnnex',cx:146.8,cz:-222,pts:annex},
  {id:'khutorok-teal-hut',kind:'khutorokTealHut',cx:hut.at[0],cz:hut.at[1],pts:T.footprint},
@@ -54,17 +55,30 @@ function shedMesh(g){const t=K.frame(g);polygon(g,shed,2.87,[.29,.32,.25],14);
  for(let i=0;i<10;i++)t.oval(123.0+(i%4)*1.7,2.96,-191.7+Math.floor(i/4)*2.5,.92,.22,.86,C.leaf);
 }
 function hedgeMesh(g,path,w=.70,h=.76){for(let i=1;i<path.length;i++){const a=path[i-1],b=path[i],len=Math.hypot(b[0]-a[0],b[1]-a[1]),t=K.frame(g,...a,Math.atan2(b[1]-a[1],b[0]-a[0]));t.box(len/2,.06,0,len,h,w,C.leaf,16);}}
-function binMesh(g,x,z,i){const t=K.frame(g,x,z),col=i%2?[.42,.48,.44]:[.37,.45,.43];
- t.box(0,.18,0,1.12,.88,.88,col,2);t.box(0,1.07,0,1.19,.10,.98,[.16,.22,.20],2);
- for(const u of [-.46,.46]){t.oval(u,.17,.30,.09,.16,.13,C.dark,2);t.box(u,.27,-.34,.045,.10,.045,[.22,.27,.23],2);}
- t.box(0,.83,-.455,.55,.055,.05,[.23,.29,.26],2);
- if(i===1)t.box(0,1.14,.31,1.12,.35,.055,[.22,.29,.26],2);
+function binMesh(g,x,z,i){const t=K.frame(g,x,z),col=i%2?[.35,.43,.40]:[.40,.46,.42],rust=[.43,.29,.18];
+ for(const u of [-.46,.46])for(const v of [-.48,.48])t.beam([u-.05,.17,v],[u+.05,.17,v],.11,C.dark,2,6);
+ if(i<6){
+  t.box(0,.20,0,1.20,.94,1.38,col,2);t.quad([-.635,1.25,-.73],[.635,1.25,-.73],[.635,1.25,.73],[-.635,1.25,.73],[.15,.20,.18],2);
+  t.box(-.615,.70,0,.035,.10,.72,[.22,.28,.24],2);
+  if(i%2===0){t.quad([-.24,1.26,.17],[.40,1.26,.17],[.40,1.74,.17],[-.24,1.74,.17],[.57,.45,.29],7);t.quad([-.43,1.26,-.49],[-.04,1.26,-.49],[-.04,1.26,-.05],[-.43,1.26,-.05],[.63,.51,.34],7);}
+ }else{
+  const bottom=[[-.48,.20,-.55],[.48,.20,-.55],[.48,.20,.55],[-.48,.20,.55]],top=[[-.78,1.34,-.73],[.78,1.34,-.73],[.78,1.34,.73],[-.78,1.34,.73]];
+  t.box(0,.18,0,.98,.08,1.12,[.20,.25,.22],2);
+  for(let k=0;k<4;k++){const j=(k+1)%4;t.quad(bottom[k],bottom[j],top[j],top[k],k===0?rust:col,2);t.beam(top[k],top[j],.035,[.24,.29,.25],2,4);}
+  t.box(-.705,.66,.16,.025,.29,.42,rust,2);t.box(-.716,.93,-.28,.018,.055,.38,[.65,.67,.54],7);
+  if(i!==8){t.quad([-.29,1.04,.10],[.39,1.04,.10],[.39,1.61,.10],[-.29,1.61,.10],[.58,.44,.27],7);t.box(-.22,.94,-.25,.46,.38,.42,C.dark,2);}
+ }
 }
+function containerWallMesh(g){for(let i=1;i<containerWall.length;i++){
+ const a=containerWall[i-1],b=containerWall[i],len=Math.hypot(b[0]-a[0],b[1]-a[1]),t=K.frame(g,...a,Math.atan2(b[1]-a[1],b[0]-a[0])),face=i===1?.128:-.128;
+ t.box(len/2,.02,0,len,1.48,.24,[.26,.48,.36],1);t.box(len/2,1.50,0,len+.04,.09,.31,[.34,.55,.41],1);
+ for(let row=0;row<8;row++){const y=.12+row*.18;t.quad([0,y,face],[len,y,face],[len,y+.012,face],[0,y+.012,face],[.38,.55,.43],1);}
+}}
 function laneMesh(g){const t=K.frame(g);for(const run of southHedgeRuns)hedgeMesh(g,run);hedgeMesh(g,cafeHedge,.65,1.03);
  T.yardMesh(g);
  for(const [x,z] of conifers){t.oval(x,1.05,z,.56,1.01,.53,[.15,.28,.18]);t.oval(x,1.83,z,.35,.60,.36,[.17,.32,.19]);}
- bins.forEach(([x,z],i)=>binMesh(g,x,z,i));polygon(g,yard,.018,C.concrete);
- for(let i=0;i<4;i++)t.oval(140.0+(i%2)*.45,.27,-195.3+i*.43,.29,.27,.25,C.dark,2);
+ polygon(g,yard,.018,C.concrete);containerWallMesh(g);bins.forEach(([x,z],i)=>binMesh(g,x,z,i));
+ for(let i=0;i<3;i++)t.box(139.8+(i%2)*.43,.04,-218.8+i*1.04,.42,.38,.39,C.dark,2);
  t.box(box[0],.04,box[1],.96,.91,.64,[.25,.49,.38],2);for(const u of [-.34,.34])t.box(box[0]+u,.07,box[1]-.332,.025,.83,.025,[.37,.60,.47],2);
  for(const [x,z] of [pole])t.beam([x,.04,z],[x,6.40,z],.085,[.64,.65,.57],1,8);
  const wirePoints=[[135.5,5.95,-225.3],[pole[0],6.28,pole[1]],[142.36,6.25,-171.62]];
@@ -73,7 +87,7 @@ function laneMesh(g){const t=K.frame(g);for(const run of southHedgeRuns)hedgeMes
 const inHut=T.inHut;
 function solid(x,z){if(J.inside(annex,x,z)||J.inside(shed,x,z)||inHut(x,z)||T.solid(x,z))return true;
  if(southHedgeRuns.some(run=>J.distance(run,x,z)<.37)||J.distance(cafeHedge,x,z)<.35||conifers.some(p=>Math.hypot(x-p[0],z-p[1])<.52))return true;
- if(bins.some(p=>Math.abs(x-p[0])<.59&&Math.abs(z-p[1])<.49)||Math.abs(x-box[0])<.51&&Math.abs(z-box[1])<.36||Math.hypot(x-pole[0],z-pole[1])<.20)return true;
+ if(bins.some((p,i)=>Math.abs(x-p[0])<(i<6?.63:.80)&&Math.abs(z-p[1])<(i<6?.72:.76))||J.distance(containerWall,x,z)<.15||Math.abs(x-box[0])<.51&&Math.abs(z-box[1])<.36||Math.hypot(x-pole[0],z-pole[1])<.20)return true;
  const a=porch[3],b=porch[2],lineZ=a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]);return x>a[0]&&x<b[0]&&Math.abs(z-lineZ)<.10&&Math.abs(x-145.1)>.50;
 }
 function clearsTree(x,z){return T.clearsTree(x,z)||x>119&&x<158&&z>-232&&z<-180&&(J.inside(lawn,x,z)||J.inside(porch,x,z)||J.inside(yard,x,z)||J.distance(axis,x,z)<halfRoad+.65||J.distance(eastWalk,x,z)<1.22||J.distance(porchApproach,x,z)<1.05||J.distance(yardApproach,x,z)<1.05||J.inside(annex,x,z)||J.inside(shed,x,z)||inHut(x,z,1.0));}
@@ -86,6 +100,6 @@ function applyGround(cats,park){cells(park,(i,x,z)=>{const old=cats[i]&31;if([4,
  if(J.distance(axis,x,z)<halfRoad)cats[i]=67;
 });}
 function applyObstacles(cats,park){cells(park,(i,x,z)=>{if(![4,5].includes(cats[i]&31)&&(solid(x,z)||T.solid(x,z,park.mpp*.42)||Math.hypot(x-pole[0],z-pole[1])<.20+park.mpp*.42))cats[i]=77;});}
-const api={station,views,axis,halfRoad,eastWalk,porchApproach,yardApproach,annex,porch,hut,shed,yard,lawn,southHedge,southHedgeRuns,cafeHedge,conifers,bins,box,pole,trees,entries,annexMesh,hutMesh,shedMesh,laneMesh,solid,clearsTree,applyGround,applyObstacles};
+const api={station,views,axis,halfRoad,eastWalk,porchApproach,yardApproach,annex,porch,hut,shed,yard,lawn,southHedge,southHedgeRuns,cafeHedge,conifers,bins,containerWall,box,pole,trees,entries,annexMesh,hutMesh,shedMesh,laneMesh,solid,clearsTree,applyGround,applyObstacles};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkKhutorokLane=api;
 })(typeof window!=='undefined'?window:globalThis);

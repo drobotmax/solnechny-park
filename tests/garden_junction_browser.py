@@ -42,7 +42,7 @@ with sync_playwright() as p:
     page.evaluate('p=>__calibrationCamera=p',dict(x=104.4,z=-188,y=32,heading=0,pitch=-.83))
     page.wait_for_timeout(250);page.locator('#c').screenshot(path=str(OUT/'garden-junction-layout.png'))
     report['station']=station;report['views']=views;report['pixel_controls']={}
-    for object_id,view in [('b76','west'),('b126','south'),('garden-stair-junction','north'),('garden-stair-junction','south'),('garden-stair-junction','east')]:
+    for object_id,view in [('b76','west'),('b126','north'),('garden-stair-junction','north'),('garden-stair-junction','south'),('garden-stair-junction','east')]:
         camera(view)
         page.evaluate("id=>{const m=__junctionMeshes.resident.get(id).value;window.__savedJunctionMesh=[m,m.n];m.n=0}",object_id)
         page.wait_for_timeout(150);hidden=Image.open(io.BytesIO(page.locator('#c').screenshot())).convert('RGB')
@@ -71,8 +71,8 @@ with sync_playwright() as p:
             page.keyboard.up('w');page.evaluate('clearInterval(__junctionTimer);__car.v=0')
         end=page.evaluate('[__car.x,__car.z]');report['drives'][name]=dict(end=end,waypoints=len(path))
         assert math.dist(end,path[-1])<.65,(name,end);print('drive:',name,len(path),'waypoints',flush=True)
-    paths=page.evaluate('[ParkGardenJunction.shortcut,ParkGardenJunction.westAccess,ParkYeseninGarden.paths[0],ParkYeseninGarden.paths[2],ParkYeseninGarden.paths[3]]')
-    for name,path in zip(['north_pavers','western_access','east_garden','west_garden','southern_curve'],paths):follow(name,path)
+    paths=page.evaluate('[ParkGardenJunction.shortcut,ParkGardenJunction.westAccess,ParkGardenJunction.courtLane,ParkYeseninGarden.paths[0],ParkYeseninGarden.paths[2],ParkYeseninGarden.paths[3]]')
+    for name,path in zip(['north_pavers','western_access','court_lane','east_garden','west_garden','southern_curve'],paths):follow(name,path)
     follow('western_square',[[98,-209.0],[90,-208.2]])
     page.evaluate('p=>{__car.x=p[0];__car.z=p[1];__car.heading=Math.PI;__car.v=0;__car.steer=0}',station)
     page.keyboard.down('w');page.wait_for_timeout(2200);page.keyboard.up('w');page.evaluate('__car.v=0')
