@@ -847,7 +847,7 @@
     });
     park.fences.forEach(function (f) {
       polyline(f.pts, 0.3, function (x, z, s) {
-        if(ParkMeshes.safariReplacesFence(x,z))return;
+        if(ParkMeshes.safariReplacesFence(x,z)||ParkMeshes.suspension.fenceGap(x,z)||ParkMeshes.zoo.replacesFence(x,z))return;
         var post = (s % 2.5) < 0.3;
         for (var y = 0.15; y < f.h; y += post ? 0.15 : 0.45) cl.add(x, y, z, post ? [70, 70, 64] : [96, 112, 92], post ? 0.12 : 0.08, false);
       });
@@ -856,7 +856,7 @@
     park.bridges.forEach(function (b) {
       // OSM maps the entrance road and its two sidewalks as three ways.
       // The roadside rails belong to the sidewalks, not to a second road deck.
-      if (b.osm_id === 27081408) return;
+      if (b.osm_id === 27081408 || b.osm_id === 46869602) return;
       if (b.osm_id === 176130545 || b.osm_id === 176130547) return; // Solid entrance rails.
       var p = b.pts;
       var entranceWalk = b.osm_id === 176130545 || b.osm_id === 176130547;
@@ -1139,6 +1139,7 @@
   var smallWildlife = { birds: [], squirrels: [] }, smallGPU = {};
   var nextBark = 3, nextPant = 0, nextJayRattle = 0, nextJayMeow = 20;
   var forestBirds = { birds: [], groups: [], woodpeckers: [] }, forestGPU = [], forestWingGPU = [], nextCaw = 4;
+  var zoo={animals:[]},zooGPU={},zooMeshBytes=0;
   var dogs = { dogs: [] }, dogGPU = [], dogLegGPU = [];
   var pigeons = { groups: [], birds: [] }, pigeonGPU = null, wingGPU = null, nextCoo = 2;
   var mallards = { groups: [], ducks: [], coots: [], birds: [] }, duckGPU = [], duckTime = 0, nextQuack = 3, nextCoot = 8;
@@ -1303,6 +1304,17 @@
     if (nextPant <= 0 && runner) { animalSound(runner, 'pant'); nextPant = 0.16 + Math.random() * 0.08; }
   }
 
+  function buildZoo(){
+    zoo=ParkZoo.create(catRaw);
+    ParkZoo.pens.forEach(function(p){
+      var parts={};['body','leg'].forEach(function(part){
+        var g=new ParkMeshes.Geometry();ParkZoo.animal(g,p.id,part);
+        var source={data:new Float32Array(g.data),n:g.data.length/10,center:[0,2,0],radius:7};
+        parts[part]=uploadMeshData(source);zooMeshBytes+=source.data.byteLength;
+      });zooGPU[p.id]=parts;
+      park.labels.unshift([p.name,[p.x,p.z],22]);
+    });
+  }
   function buildDogs() {
     dogs = Dogs.create(park, pigeons.groups, function (x, z) {
       var raw = catRaw(x, z), surface = raw & 31;
@@ -1367,7 +1379,7 @@
     if (i < 0 || j < 0 || i >= park.h || j >= park.w) return WATER;    // edge of the map
     return cats[i * park.w + j];
   }
-  function catAt(x, z) { return catRaw(x, z) & 31; }
+  function catAt(x, z) { var deck=ParkMeshes.suspension.surface(x,z); return deck===null ? catRaw(x, z) & 31 : deck; }
 
   function loadImage(url) {
     return new Promise(function (res, rej) { var im = new Image(); im.onload = function () { res(im); }; im.onerror = function () { rej(new Error(url)); }; im.src = url; });
@@ -1419,6 +1431,7 @@
     for (var e = -1; e <= 1; e += 2) {
       var cx = x + sx * off * e, cz = z + sz * off * e;
       if (SOLID[catAt(cx, cz)] || SOLID[catAt(cx + RAD, cz)] || SOLID[catAt(cx - RAD, cz)] || SOLID[catAt(cx, cz + RAD)] || SOLID[catAt(cx, cz - RAD)]) return true;
+      if (ParkZoo.solid(cx,cz,RAD)) return true;
       if (avenueTrain && ParkAvenueTrain.blockedAt(avenueTrain,cx,cz,RAD)) return true;
       if (nearTrunk(cx, cz, RAD + 0.25)) return true;
     }
@@ -1620,20 +1633,22 @@
     var distance = Math.hypot(d.x - car.x, d.z - car.z, d.y);
     if (distance > 40) return;
     if (!duckGain) { duckGain = actx.createGain(); duckGain.connect(actx.destination); }
-    var wood = (d.species === 'woodpecker' || d.species === 'spottedWoodpecker'), count = wood ? 7 : 3, spacing = wood ? 0.13 : 0.23;
-    var duration = wood ? 0.1 : 0.18, volume = (wood ? 0.23 : 0.14) * Math.pow(1 - distance / 40, 2);
+    var spotted = d.species === 'spottedWoodpecker', wood = d.species === 'woodpecker' || spotted;
+    // Green: descending laughing phrase. Great spotted: short, sharp kik notes.
+    var count = spotted ? 3 : wood ? 7 : 3, spacing = spotted ? 0.22 : wood ? 0.18 : 0.23;
+    var duration = spotted ? 0.055 : wood ? 0.14 : 0.18, volume = (spotted ? 0.16 : wood ? 0.23 : 0.14) * Math.pow(1 - distance / 40, 2);
     var pan = actx.createStereoPanner();
     pan.pan.value = Math.sin(Math.atan2(d.x - car.x, -(d.z - car.z)) - cam.yaw - cam.orbit); pan.connect(duckGain);
     for (var i = 0; i < count; i++) {
       var source = actx.createOscillator(), filter = actx.createBiquadFilter(), gain = actx.createGain();
       var t = actx.currentTime + i * spacing;
-      source.type = wood ? 'triangle' : 'sawtooth';
-      source.frequency.setValueAtTime(wood ? 820 : 165, t);
-      source.frequency.exponentialRampToValueAtTime(wood ? 1350 - i * 45 : 100, t + 0.025);
-      source.frequency.exponentialRampToValueAtTime(wood ? 550 : 75, t + duration);
-      filter.type = 'bandpass'; filter.frequency.value = wood ? 1500 : 600; filter.Q.value = 0.8;
+      source.type = spotted ? 'square' : wood ? 'triangle' : 'sawtooth';
+      source.frequency.setValueAtTime(spotted ? 2100 : wood ? 820 : 165, t);
+      source.frequency.exponentialRampToValueAtTime(spotted ? 2900 : wood ? 1350 - i * 70 : 100, t + (spotted ? 0.008 : 0.025));
+      source.frequency.exponentialRampToValueAtTime(spotted ? 1700 : wood ? 550 : 75, t + duration);
+      filter.type = 'bandpass'; filter.frequency.value = spotted ? 2600 : wood ? 1500 : 600; filter.Q.value = spotted ? 1.2 : 0.8;
       gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), t + 0.012);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), t + (spotted ? 0.004 : 0.012));
       gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
       source.connect(filter); filter.connect(gain); gain.connect(pan); source.start(t); source.stop(t + duration);
       source.onended = (function (voice, f, g, last) { return function () {
@@ -1850,9 +1865,22 @@
       var bx=unit.x+Math.sin(unit.heading)*lengths[i]/2,bz=unit.z-Math.cos(unit.heading)*lengths[i]/2,dx=bx-ax,dz=bz-az,len=Math.hypot(dx,dz);
       if(len>.001)drawTrainPart(trainMeshes.coupler,[dz/len,0,-dx/len,0,0,1,0,0,dx,0,dz,0,ax,.40,az,1]);
     });
+    var zooVisible=0,zooTriangles=0;
+    function drawZooPart(part,transform){gl.uniformMatrix4fv(M.uModel,false,transform);gl.bindVertexArray(part.vao);gl.drawArrays(gl.TRIANGLES,0,part.n);zooTriangles+=part.n/3;calls++;}
+    zoo.animals.forEach(function(d){
+      if(!ParkPerformance.visible(view,d.x,2,d.z,6,fov,canvas.width/canvas.height,fogFar+30))return;
+      zooVisible++;var parts=zooGPU[d.species],spec=ParkZoo.legSpec[d.species];
+      var base=yawMat(d.heading,d.x,0,d.z);
+      drawZooPart(parts.body,base);
+      [-1,1].forEach(function(side){(d.species==='flamingo'?[0]:[-1,1]).forEach(function(end){
+        var swing=d.v?Math.sin(d.phase+(side===end?Math.PI:0))*.28:0,c=Math.cos(swing),sn=Math.sin(swing);
+        drawZooPart(parts.leg,mat4mul(base,[1,0,0,0,0,c,sn,0,0,-sn,c,0,side*spec.x,spec.y,end*spec.z,1]));
+      });});
+    });
+    window.__stats.zoo={animals:zoo.animals.length,visible:zooVisible,bytes:zooMeshBytes,triangles:zooTriangles};
     gl.uniformMatrix4fv(M.uModel,false,IDENT);
     window.__stats.train={distance:avenueTrain.distance,speed:avenueTrain.speed,waiting:avenueTrain.waiting,phase:avenueTrain.units[0].phase,units:avenueTrain.units.map(function(p){return {x:p.x,z:p.z,heading:p.heading};}),visible:trainVisible,triangles:trainTriangles,bytes:trainMeshBytes};
-    window.__stats.mesh={triangles:meshTriangles+trainTriangles,resident:meshes.resident.size,bytes:meshBytes+trainMeshBytes};
+    window.__stats.mesh={triangles:meshTriangles+trainTriangles+zooTriangles,resident:meshes.resident.size,bytes:meshBytes+trainMeshBytes+zooMeshBytes};
 
     gl.useProgram(P.prog);
     colorUniforms(P);
@@ -2157,6 +2185,7 @@
     syncDoomMusic();
     if (game.mode === 'play' || game.mode === 'free') {
       Dogs.update(dogs, dt, car);
+      ParkZoo.update(zoo,dt);
       dogSoundTick(dt);
       SmallWildlife.update(smallWildlife, dt, car, dogs.dogs, smallBirdCall, !doomMode);
       if (!doomMode) { forestTick(dt); jaySoundTick(dt); }
@@ -2431,7 +2460,7 @@
              !oakSites.some(function (oak) { return Math.hypot(tree[0] - oak.at[0], tree[1] - oak.at[1]) < 7.5; }) &&
              !ParkMeshes.verandaClearsTree(tree[0],tree[1])&&!ParkMeshes.centralClearsTree(tree[0],tree[1]);
     }).concat(ParkMeshes.centralTrees);
-    meshes=new ParkStreaming.Stream(meshEntries.concat(ParkMeshes.forestEntries(park.trees),ParkMeshes.bridgeEntries(park)),uploadMesh,releaseMesh,2);
+    meshes=new ParkStreaming.Stream(meshEntries.concat(ParkMeshes.forestEntries(park.trees),ParkMeshes.bridgeEntries(park),ParkZoo.entries()),uploadMesh,releaseMesh,2);
     var stageFootprint=meshEntries.find(function(e){return e.kind==='plazaStage';}).pts;
     park.props = park.props.filter(function (prop) {
       return !inside(stageFootprint,prop[1],prop[2]) &&
@@ -2455,6 +2484,8 @@
     ParkKhutorokLane.applyGround(cats,park);
     ParkAvenueTrain.applyGround(cats,park);
     ParkMeshes.applyBridgeGround(cats,park);
+    ParkMeshes.suspension.applyGround(cats,park);
+    ParkZoo.applyGround(cats,park);
     for(var z=-440;z<=-400;z+=park.mpp)for(var x=-22;x<=43;x+=park.mpp){
       var zone=ParkMeshes.landingZone(x,z);
       if(!zone)continue;
@@ -2620,6 +2651,7 @@
 
     buildPigeons();
     buildDogs();
+    buildZoo();
     buildGulls();
     buildForestBirds();
     buildSmallWildlife();
@@ -2698,6 +2730,10 @@
     }else if(preview==='central-alley'){
       startGame('free');car.x=26;car.z=-334;car.heading=-.20;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.13;cam.dist=canvas.width<canvas.height?10:5;cam.top=false;
+    }else if(preview==='zoo'){
+      visitZoo();
+    }else if(preview==='suspension-bridge'){
+      visitSuspensionBridge();
     }else if(preview==='bridge'){
       startGame('free');car.x=8.5;car.z=-430;car.heading=-.205;car.v=0;
       cam.yaw=car.heading;cam.orbit=0;cam.pitch=.18;cam.dist=canvas.width<canvas.height?10:6;cam.top=false;
@@ -2752,6 +2788,21 @@
     if (!found) throw new Error('Нет свободного подхода к фонтанам');
   }
   var detailStop=0;
+  function visitSuspensionBridge(){
+    if(!park||!stroller)return;
+    Object.keys(keys).forEach(function(k){keys[k]=false;});
+    startGame('free');var f=ParkMeshes.suspension,p=f.at(-6,0,0);
+    car.x=p[0];car.z=p[2];car.heading=Math.atan2(f.dx,-f.dz);car.v=0;car.steer=0;
+    cam.yaw=car.heading;cam.orbit=0;cam.pitch=.14;cam.dist=4;cam.top=false;
+  }
+  function visitZoo(){
+    if(!park||!stroller)return;
+    Object.keys(keys).forEach(function(k){keys[k]=false;});
+    startGame('free');car.x=ParkZoo.start.x;car.z=ParkZoo.start.z;car.heading=ParkZoo.start.heading;car.v=0;car.steer=0;
+    cam.yaw=car.heading;cam.orbit=0;cam.pitch=.10;cam.dist=5;cam.top=false;
+  }
+  $('visitZoo').addEventListener('click',visitZoo);
+  $('visitBridge').addEventListener('click',visitSuspensionBridge);
   function visitDetails(){
     var stops=[[53,-414,22,-Math.PI/2],[-44,-285,24,0],[-155,-258,32,0],[45,-327,15,Math.PI/2]],target=stops[detailStop++%stops.length];
     for(var ring=0;ring<12;ring+=2)for(var a=target[3];a<target[3]+Math.PI*2;a+=Math.PI/24){
@@ -2774,5 +2825,6 @@
   window.__smallWildlife = function () { return smallWildlife; };
   window.__doom = function () { return { active: doomMode, music: doomMusic, horde: doomHorde, corpses: doomCorpses, kills: doomKills }; };
   window.__gulls = function () { return gulls; };
+  window.__zoo=function(){return zoo;};
   window.__dogs = function () { return dogs; };
 })();

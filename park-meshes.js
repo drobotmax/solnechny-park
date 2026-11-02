@@ -16,6 +16,8 @@ const Khutorok=typeof module!=='undefined'&&module.exports?require('./park-khuto
 const YeseninGarden=typeof module!=='undefined'&&module.exports?require('./park-yesenin-garden.js'):root.ParkYeseninGarden;
 const GardenJunction=typeof module!=='undefined'&&module.exports?require('./park-garden-junction.js'):root.ParkGardenJunction;
 const KhutorokLane=typeof module!=='undefined'&&module.exports?require('./park-khutorok-lane.js'):root.ParkKhutorokLane;
+const Suspension=typeof module!=='undefined'&&module.exports?require('./park-suspension-bridge.js'):root.ParkSuspensionBridge;
+const Zoo=typeof module!=='undefined'&&module.exports?require('./park-zoo.js'):root.ParkZoo;
 const buildingIds=[3,4,5,6,7,47,48,49,50,67,68,76,77,81,94,113,115,122,123,125,126,128], rideIds=[0,1,2,3,6,8,9,17,23,25,26,27,28,29,36,45,46];
 // Placed and scaled to the stage rectangle marked in the user's plaza screenshot.
 const plazaStageFootprint=[[49.93,-379.74],[44.53,-369.06],[50.08,-366.26],[55.48,-376.94]];
@@ -48,7 +50,7 @@ function bridgeWalkRise(x,z){
  if(s<0||s>f.length||d<half+.20||d>half+bridgeSpec.walkWidth-.16)return 0;
  return .025+bridgeSpec.walkRise*Math.min(1,s/bridgeSpec.rampLength,(f.length-s)/bridgeSpec.rampLength);
 }
-function terrainHeight(x,z){return terrainHeightBase(x,z)+bridgeWalkRise(x,z);}
+function terrainHeight(x,z){const h=Suspension.height(x,z);return h===null?terrainHeightBase(x,z)+bridgeWalkRise(x,z):h;}
 function landingZone(x,z){
  const a=bridgeLandingAxis[0],b=bridgeLandingAxis[1],length=Math.hypot(b[0]-a[0],b[1]-a[1]);
  const dx=(b[0]-a[0])/length,dz=(b[1]-a[1])/length;
@@ -77,7 +79,7 @@ function entries(park){
   {id:'central-west',cx:12,cz:-329,kind:'centralWest',pts:CentralAlley.westBed},
   {id:'main-avenue',cx:28,cz:-299,kind:'mainAvenue',pts:CentralAlley.continuationBed},
   {id:'avenue-junction',cx:40,cz:-240,kind:'avenueJunction',pts:[[-1,-248],[94,-253],[94,-219],[12,-219]]},
-  {id:'safari-avenue',cx:56,cz:-190,kind:'safariAvenue',pts:[[31,-216],[72,-216],[72,-152],[31,-152]]}]).concat(ScannedLandmarks.entries(),AvenuePicnic.entries(),Khutorok.entries(),YeseninGarden.entries(),GardenJunction.entries(),KhutorokLane.entries());
+  {id:'safari-avenue',cx:56,cz:-190,kind:'safariAvenue',pts:[[31,-216],[72,-216],[72,-152],[31,-152]]}]).concat(ScannedLandmarks.entries(),AvenuePicnic.entries(),Khutorok.entries(),YeseninGarden.entries(),GardenJunction.entries(),KhutorokLane.entries(),Suspension.entries());
 }
 function forestEntries(trees){
  const sectors=new Map();
@@ -545,12 +547,12 @@ function pendulum(g,e){
  }
 }
 function build(e){
- const g=new Geometry();({khutorokAnnex:KhutorokLane.annexMesh,khutorokTealHut:KhutorokLane.hutMesh,khutorokVineShed:KhutorokLane.shedMesh,khutorokServiceLane:KhutorokLane.laneMesh,gardenStairJunction:GardenJunction.build,gardenKiosk:GardenJunction.kiosk,gardenPavilion:GardenJunction.pavilionMesh,yeseninGarden:YeseninGarden.build,khutorok:Khutorok.building,khutorokTerrace:Khutorok.terrace,khutorokJunction:Khutorok.junction,picnicBackdrop:AvenuePicnic.backdrop,picnicKiosks:AvenuePicnic.kiosks,picnicAvenue:AvenuePicnic.avenue,plazaBarriers:ScannedLandmarks.plazaBarriers,yesenin:ScannedLandmarks.sculpture,yeseninSite:ScannedLandmarks.site,building,bikeCafe,tutCoffee,bridgeLanding,plazaStage,bumper,carousel,coaster,spinner,train,swingTower,pendulum,forest,bridgeRails,ticketOffice:TicketOffice.build,transylvania:Transylvania.build,upsideDownHouse:UpsideDownHouse.build,policePost:HouseSurroundings.cabin,shoreTicket:HouseSurroundings.cabin,shoreMooring:HouseSurroundings.mooring,veranda:Veranda.main,verandaGazebo:Veranda.gazebo,carCarousel:CentralAlley.carCarousel,toyCarousel:CentralAlley.toyCarousel,weddingCarousel:CentralAlley.weddingCarousel,kiddieCarousel:CentralAlley.kiddieCarousel,airTrack:CentralAlley.airTrack,serviceKiosk:CentralAlley.serviceKiosk,centralWest:CentralAlley.westGarden,mainAvenue:CentralAlley.mainGarden,foodStalls:SafariAvenue.foodStalls,safariGate:SafariAvenue.safariGate,safariAvenue:SafariAvenue.avenueDetails,terracePavilion:AvenueJunction.terrace,shootingGallery:AvenueJunction.shootingGallery,playground:AvenueJunction.playground,avenueJunction:AvenueJunction.junction,alleyCafe:CentralAlley.cafe,arcade:CentralAlley.arcade,rideBooth:CentralAlley.booth,centralAlley:CentralAlley.avenue}[e.kind])(g,e);
+ const g=new Geometry();({zooEnclosure:(g,e)=>Zoo.enclosure(g,e,SafariAvenue.label),suspensionBridge:Suspension.build,khutorokAnnex:KhutorokLane.annexMesh,khutorokTealHut:KhutorokLane.hutMesh,khutorokVineShed:KhutorokLane.shedMesh,khutorokServiceLane:KhutorokLane.laneMesh,gardenStairJunction:GardenJunction.build,gardenKiosk:GardenJunction.kiosk,gardenPavilion:GardenJunction.pavilionMesh,yeseninGarden:YeseninGarden.build,khutorok:Khutorok.building,khutorokTerrace:Khutorok.terrace,khutorokJunction:Khutorok.junction,picnicBackdrop:AvenuePicnic.backdrop,picnicKiosks:AvenuePicnic.kiosks,picnicAvenue:AvenuePicnic.avenue,plazaBarriers:ScannedLandmarks.plazaBarriers,yesenin:ScannedLandmarks.sculpture,yeseninSite:ScannedLandmarks.site,building,bikeCafe,tutCoffee,bridgeLanding,plazaStage,bumper,carousel,coaster,spinner,train,swingTower,pendulum,forest,bridgeRails,ticketOffice:TicketOffice.build,transylvania:Transylvania.build,upsideDownHouse:UpsideDownHouse.build,policePost:HouseSurroundings.cabin,shoreTicket:HouseSurroundings.cabin,shoreMooring:HouseSurroundings.mooring,veranda:Veranda.main,verandaGazebo:Veranda.gazebo,carCarousel:CentralAlley.carCarousel,toyCarousel:CentralAlley.toyCarousel,weddingCarousel:CentralAlley.weddingCarousel,kiddieCarousel:CentralAlley.kiddieCarousel,airTrack:CentralAlley.airTrack,serviceKiosk:CentralAlley.serviceKiosk,centralWest:CentralAlley.westGarden,mainAvenue:CentralAlley.mainGarden,foodStalls:SafariAvenue.foodStalls,safariGate:SafariAvenue.safariGate,safariAvenue:SafariAvenue.avenueDetails,terracePavilion:AvenueJunction.terrace,shootingGallery:AvenueJunction.shootingGallery,playground:AvenueJunction.playground,avenueJunction:AvenueJunction.junction,alleyCafe:CentralAlley.cafe,arcade:CentralAlley.arcade,rideBooth:CentralAlley.booth,centralAlley:CentralAlley.avenue}[e.kind])(g,e);
  if(e.kind==='upsideDownHouse')HouseSurroundings.stairs(g,e);
  const data=new Float32Array(g.data);let radius=0;
  for(let i=0;i<data.length;i+=10)radius=Math.max(radius,Math.hypot(data[i]-e.cx,data[i+1]-5,data[i+2]-e.cz));
  return {data,n:data.length/10,center:[e.cx,5,e.cz],radius};
 }
-const api={Geometry,entries,forestEntries,bridgeEntries,bridgeFrame,bridgeSpec,bridgeWalkRise,applyBridgeGround,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec,verandaClearsTree:Veranda.clearsTree,centralClearsTree:(x,z)=>KhutorokLane.clearsTree(x,z)||GardenJunction.clearsTree(x,z)||YeseninGarden.clearsTree(x,z)||Khutorok.clearsTree(x,z)||ScannedLandmarks.clearsTree(x,z)||AvenuePicnic.clearsTree(x,z)||CentralAlley.clearsTree(x,z)||AvenueTrain.clearsTree(x,z)||AvenueJunction.clearsTree(x,z)||SafariAvenue.clearsTree(x,z),safariReplacesFence:SafariAvenue.replacesFence,centralTrees:CentralAlley.trees.concat(AvenueJunction.trees,SafariAvenue.trees,AvenueJunction.extraTrees,AvenuePicnic.trees,Khutorok.trees,YeseninGarden.trees,GardenJunction.trees,KhutorokLane.trees)};
+const api={zoo:Zoo,suspension:Suspension,Geometry,entries,forestEntries,bridgeEntries,bridgeFrame,bridgeSpec,bridgeWalkRise,applyBridgeGround,build,buildingIds,rideIds,landingZone,terrainHeight,terrainSpec,verandaClearsTree:Veranda.clearsTree,centralClearsTree:(x,z)=>Zoo.clearsTree(x,z)||Suspension.clearsTree(x,z)||KhutorokLane.clearsTree(x,z)||GardenJunction.clearsTree(x,z)||YeseninGarden.clearsTree(x,z)||Khutorok.clearsTree(x,z)||ScannedLandmarks.clearsTree(x,z)||AvenuePicnic.clearsTree(x,z)||CentralAlley.clearsTree(x,z)||AvenueTrain.clearsTree(x,z)||AvenueJunction.clearsTree(x,z)||SafariAvenue.clearsTree(x,z),safariReplacesFence:SafariAvenue.replacesFence,centralTrees:CentralAlley.trees.concat(AvenueJunction.trees,SafariAvenue.trees,AvenueJunction.extraTrees,AvenuePicnic.trees,Khutorok.trees,YeseninGarden.trees,GardenJunction.trees,KhutorokLane.trees)};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ParkMeshes=api;
 })(typeof window!=='undefined'?window:globalThis);

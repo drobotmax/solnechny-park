@@ -22,6 +22,8 @@
 git switch -c add/new-scan
 # Edit files and check the result locally.
 node --check park.js
+node --check park-suspension-bridge.js
+node --check park-zoo.js
 node --check app.js
 node --check capture-scenes.js
 node --check habitat-sites.js
@@ -57,6 +59,14 @@ Web Audio после пространственного ослабления, б
 удаление скамеек проверяет `python3 tests/animals_browser.py`. Он также
 проверяет лай при подходе собаки к стае и непрерывный облёт голубей
 с возвращением к месту взлёта.
+
+Зоопарк проверяет `python3 tests/zoo_browser.py`: быстрый переход из меню,
+шесть видов животных, движение, вход через существующие ворота,
+ограждения вольеров, палитры и мобильная ширина.
+
+Подвесной мост проверяет `python3 tests/suspension_bridge_browser.py`: полный
+проезд в обе стороны, лестница вверх/вниз, боковые ограничения, палитры и
+мобильный экран. `PARK_BRIDGE_OUT` задаёт каталог снимков и отчёта.
 
 Грачей, серых ворон и дятлов проверяет `python3 tests/forest_birds_browser.py`:
 размещение в лесу, карканье, кормёжка на земле, низкий волнистый полёт

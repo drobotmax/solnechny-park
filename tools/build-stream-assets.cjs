@@ -17,12 +17,23 @@ vm.runInContext(source.slice(source.indexOf('  function Cloud()'),source.indexOf
 vm.runInContext(source.slice(source.indexOf('  function extractStroller'),source.indexOf('  // The Ferris wheel turns')),ctx);
 vm.runInContext(fs.readFileSync('spz.js','utf8'),ctx);
 const out='park/stream';fs.mkdirSync(out,{recursive:true});
+// Reuse identical payloads across zlib versions, which can compress them differently.
+const previous=new Map();
+if(fs.existsSync('park/stream-manifest.json')){
+ const manifest=JSON.parse(fs.readFileSync('park/stream-manifest.json'));
+ for(const asset of [...manifest.chunks,manifest.stroller])if(fs.existsSync(asset.src)){
+  const packed=fs.readFileSync(asset.src),raw=zlib.gunzipSync(packed);
+  previous.set(crypto.createHash('sha256').update(raw).digest('hex'),{src:asset.src,n:raw.readUInt32LE(4),bytes:raw.length,downloadBytes:packed.length});
+ }
+}
 function writeCloud(c){
  const n=c.size.length,buf=Buffer.alloc(16+n*20);
  buf.writeUInt32LE(0x31504350,0);buf.writeUInt32LE(n,4);buf.writeFloatLE(c.length||0,8);buf.writeFloatLE(c.width||0,12);
  Buffer.from(c.pos.buffer,c.pos.byteOffset,c.pos.byteLength).copy(buf,16);
  Buffer.from(c.col.buffer,c.col.byteOffset,c.col.byteLength).copy(buf,16+n*12);
  Buffer.from(c.size.buffer,c.size.byteOffset,c.size.byteLength).copy(buf,16+n*16);
+ const existing=previous.get(crypto.createHash('sha256').update(buf).digest('hex'));
+ if(existing)return existing;
  const packed=zlib.gzipSync(buf),hash=crypto.createHash('sha256').update(packed).digest('hex').slice(0,16),file=hash+'.bin.gz';
  fs.writeFileSync(path.join(out,file),packed);return {src:'park/stream/'+file,n,bytes:buf.length,downloadBytes:packed.length};
 }
@@ -33,7 +44,7 @@ const world=ctx.buildWorld(park);
 const chunks=world.chunks.map((c,i)=>Object.assign({id:String(i),cx:c.cx,cz:c.cz},writeCloud(c)));
 const raw=ctx.window.SPZ.parse(new Uint8Array(zlib.gunzipSync(fs.readFileSync('karasunsky.spz'))));
 const stroller=writeCloud(ctx.extractStroller(raw));
-const inputHashes=Object.fromEntries(['park.js','park-meshes.js','park-stroller.js','park-yesenin-shape.js','park-scanned-landmarks.js','park-ticket-office.js','park-transylvania.js','park-upside-down-house.js','park-house-surroundings.js','park-veranda.js','park-central-alley.js','park-avenue-gardens.js','park-avenue-train.js','park-avenue-junction.js','park-safari-avenue.js','park-avenue-picnic.js','park-khutorok.js','park-yesenin-garden.js','park-garden-junction.js','park-khutorok-lane.js','park-khutorok-toilet.js','park/park.json','park/scans.json','park/ground.png','karasunsky.spz','tools/build-stream-assets.cjs'].map(f=>[f,crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex')]));
+const inputHashes=Object.fromEntries(['park.js','park-meshes.js','park-zoo.js','park-suspension-bridge.js','park-stroller.js','park-yesenin-shape.js','park-scanned-landmarks.js','park-ticket-office.js','park-transylvania.js','park-upside-down-house.js','park-house-surroundings.js','park-veranda.js','park-central-alley.js','park-avenue-gardens.js','park-avenue-train.js','park-avenue-junction.js','park-safari-avenue.js','park-avenue-picnic.js','park-khutorok.js','park-yesenin-garden.js','park-garden-junction.js','park-khutorok-lane.js','park-khutorok-toilet.js','park/park.json','park/scans.json','park/ground.png','karasunsky.spz','tools/build-stream-assets.cjs'].map(f=>[f,crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex')]));
 const manifest={inputHashes,version:1,chunkSize:64,worldPoints:world.n,chunks,stroller};
 fs.writeFileSync('park/stream-manifest.json',JSON.stringify(manifest));
 // Remove only obsolete generated assets, never source scans.

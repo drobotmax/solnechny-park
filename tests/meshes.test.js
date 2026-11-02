@@ -4,7 +4,9 @@ const park=require('../park/park.json');
 test('detailed landmarks contain finite nondegenerate triangles, unit normals and bounded geometry',()=>{
  let total=0;
  for(const e of entries(park)){
-  const g=build(e);assert(g.n>0);assert.equal(g.n%3,0);total+=g.n;
+  const g=build(e);assert(g.n>0);assert.equal(g.n%3,0);
+  if(e.kind==='suspensionBridge')assert(g.data.byteLength<1.6*1024*1024,'the suspension bridge has its own 1.6 MiB budget');
+  else total+=g.n;
   for(let i=0;i<g.data.length;i+=10){
    const v=Array.from(g.data.subarray(i,i+10));assert(v.every(Number.isFinite),e.id);
    assert(Math.abs(Math.hypot(...v.slice(3,6))-1)<1e-5,e.id);
@@ -28,7 +30,7 @@ test('mapped models retain their footprints; plaza stage uses the corrected smal
  assert(Math.hypot(stage.cx-51,stage.cz+373.46)<2.5,'stage stays near the marked plaza edge');
  const depth=p=>Math.hypot(p[3][0]-p[0][0],p[3][1]-p[0][1]);
  assert(depth(stage.pts)<depth(cafe.pts)*.3);
- assert.equal(models.length,buildingIds.length+rideIds.length+19);
+ assert.equal(models.length,buildingIds.length+rideIds.length+20);
 });
 test('bike cafe entrance glazing faces the bridge landing and plaza',()=>{
  const cafe=entries(park).find(e=>e.kind==='bikeCafe'),mesh=build(cafe);
