@@ -18,7 +18,7 @@ with sync_playwright() as p:
       window.AudioContext=class extends Native {
         createOscillator(){const s=super.createOscillator(),set=s.frequency.setValueAtTime.bind(s.frequency),start=s.start.bind(s);
           s.frequency.setValueAtTime=(value,...args)=>{s.firstFrequency??=value;return set(value,...args);};
-          s.start=(...args)=>{if(s.type==='triangle'&&s.firstFrequency===820)__woodCries++;return start(...args);};return s;}
+          s.start=(...args)=>{if(s.type==='square'&&s.firstFrequency===2100)__woodCries++;return start(...args);};return s;}
       };
     """)
     page.goto(os.environ.get('PARK_URL','http://127.0.0.1:8791')+'/park.html')
