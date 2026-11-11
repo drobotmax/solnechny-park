@@ -1315,6 +1315,26 @@
       park.labels.unshift([p.name,[p.x,p.z],22]);
     });
   }
+  var zooGain=null,zooVoiceBuffers={};
+  function zooSoundTick(dt){
+    var enabled=state.sound&&!document.hidden&&(game.mode==='play'||game.mode==='free');
+    if(zooGain)zooGain.gain.value=enabled?1:0;
+    if(!enabled||!actx||actx.state!=='running')return;
+    if(!zooGain){zooGain=actx.createGain();zooGain.connect(actx.destination);}
+    ParkZoo.soundTick(zoo,dt,car,function(d){
+      var spec=ParkZoo.voices[d.species],distance=Math.hypot(d.x-car.x,d.z-car.z);
+      if(!zooVoiceBuffers[d.species]){
+        var samples=ParkZoo.voice(d.species),buffer=actx.createBuffer(1,samples.length,24000);
+        buffer.getChannelData(0).set(samples);zooVoiceBuffers[d.species]=buffer;
+      }
+      var source=actx.createBufferSource(),gain=actx.createGain(),pan=actx.createStereoPanner();
+      source.buffer=zooVoiceBuffers[d.species];source.playbackRate.value=.96+Math.random()*.08;
+      gain.gain.value=spec.volume*Math.pow(1-distance/spec.range,2);
+      pan.pan.value=Math.sin(Math.atan2(d.x-car.x,-(d.z-car.z))-cam.yaw-cam.orbit);
+      source.connect(gain);gain.connect(pan);pan.connect(zooGain);source.start();
+      source.onended=function(){source.disconnect();gain.disconnect();pan.disconnect();};
+    });
+  }
   function buildDogs() {
     dogs = Dogs.create(park, pigeons.groups, function (x, z) {
       var raw = catRaw(x, z), surface = raw & 31;
@@ -1709,7 +1729,7 @@
     source.connect(filter); filter.connect(gain); gain.connect(pan); pan.connect(duckGain); source.start();
     source.onended = function () { source.disconnect(); filter.disconnect(); gain.disconnect(); pan.disconnect(); };
   }
-  document.addEventListener('visibilitychange', function () { if (document.hidden && duckGain) duckGain.gain.value = 0; syncDoomMusic(); });
+  document.addEventListener('visibilitychange', function () { if(document.hidden&&zooGain)zooGain.gain.value=0; if (document.hidden && duckGain) duckGain.gain.value = 0; syncDoomMusic(); });
   function beep(freq, at, dur, type, vol) {
     if (!actx || !state.sound) return;
     var t = actx.currentTime + at, o = actx.createOscillator(), g = actx.createGain();
@@ -2182,6 +2202,7 @@
     var turboFov = keys.turbo && car.stamina > 0 && keys.up ? 1 : 0;
     cam.fov += (FOV0 + (8 * Math.min(1, Math.abs(car.v) / 7) + 4 * turboFov) * Math.PI / 180 - cam.fov) * Math.min(1, dt * 4);
     duckTick(dt);
+    zooSoundTick(dt);
     syncDoomMusic();
     if (game.mode === 'play' || game.mode === 'free') {
       Dogs.update(dogs, dt, car);
@@ -2369,6 +2390,7 @@
       if (key === 'pix' || key === 'natural') place();
       if (key === 'sound' && state.sound) audio();
       if (key === 'sound' && !state.sound && duckGain) duckGain.gain.value = 0;
+      if (key === 'sound' && !state.sound && zooGain) zooGain.gain.value = 0;
       syncDoomMusic();
       syncUI(); save();
       e.target.blur();          // arrow keys drive the stroller, not the slider
