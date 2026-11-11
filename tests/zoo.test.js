@@ -48,3 +48,25 @@ test('viewing aprons have no trunks between each approach and the pen fence',()=
   assert.equal(remaining.length,0,JSON.stringify({pen:p.id,z,remaining}));
  }
 });
+test('every zoo species has a distinct finite, bounded voice with a soft start and finish',()=>{
+ const signatures=new Set();
+ for(const p of Z.pens){
+  const a=Z.voice(p.id),rms=Math.sqrt(a.reduce((sum,v)=>sum+v*v,0)/a.length);
+  assert(a.every(Number.isFinite));assert(a.every(v=>Math.abs(v)<=.86));
+  assert(rms>.05&&rms<.6);assert.equal(Math.abs(a[0]),0);assert(Math.abs(a[a.length-1])<.001);
+  signatures.add(require('node:crypto').createHash('sha256').update(Buffer.from(a.buffer)).digest('hex'));
+ }
+ assert.equal(signatures.size,6);
+});
+test('zoo calls come from nearby animals, respect species gaps and do not form a chorus',()=>{
+ const pop=Z.create(()=>4),heard=[];
+ for(let i=0;i<Z.pens.length;i++){
+  const p=Z.pens[i],calls=[];pop.voiceWait.fill(0);
+  for(let t=0;t<600;t++){Z.soundTick(pop,.1,p,d=>{if(d.species===p.id)calls.push(t/10);},()=>.5);}
+  assert(calls.length>=2,p.id);
+  for(let j=1;j<calls.length;j++)assert(calls[j]-calls[j-1]>=Z.voices[p.id].gap-.11);
+  heard.push(p.id);
+ }
+ assert.equal(heard.length,6);
+ Z.soundTick(pop,1000,{x:2000,z:2000},d=>assert.fail('distant zoo audible'));
+});
